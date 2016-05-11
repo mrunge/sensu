@@ -1,9 +1,9 @@
 # Generated from sensu-0.16.0.gem by gem2rpm -*- rpm-spec -*-
 %global gem_name sensu
-%global sensu_build_release 1
+%global sensu_build_release 2
 
 Name:           %{gem_name}
-Version:        0.22.0
+Version:        0.23.2
 Release:        1%{?dist}
 Summary:        A monitoring framework
 Group:          Development/Languages
@@ -11,30 +11,45 @@ License:        MIT
 URL:            https://github.com/sensu/sensu
 Source0:        https://rubygems.org/gems/%{gem_name}-%{version}.gem
 Source1:        https://github.com/sensu/sensu-build/archive/%{version}-%{sensu_build_release}.tar.gz
+Source2:        https://github.com/sensu/sensu/archive/v%{version}.tar.gz
 Patch0:         sensu-sensu-build-fix-systemd-unit-binary-paths.patch
+Patch1:         0001-Disable-network-based-tests.patch
 
 BuildRequires:      ruby
 BuildRequires:      rubygems-devel
 BuildRequires:      systemd
 BuildRequires:      rubygem(rspec)
+BuildRequires:      rubygem(addressable)
+
+BuildRequires:      rubygem(async_sinatra) >= 1.2.0
+BuildRequires:      rubygem(eventmachine) = 1.2.0.1
+BuildRequires:      rubygem(sensu-extension) = 1.5.0
+BuildRequires:      rubygem(sensu-extensions) = 1.5.0
+BuildRequires:      rubygem(sensu-json) = 1.1.1
+BuildRequires:      rubygem(sensu-logger) = 1.2.0
+BuildRequires:      rubygem(sensu-redis) = 1.3.0
+BuildRequires:      rubygem(sensu-settings) = 3.4.0
+BuildRequires:      rubygem(sensu-spawn) = 1.8.0
+BuildRequires:      rubygem(sensu-transport) = 5.0.0
+BuildRequires:      rubygem(sinatra) >= 1.4.6
+BuildRequires:      rubygem(thin) >= 1.6.3
 
 Requires(pre):      shadow-utils
 Requires(post):     systemd
 Requires(preun):    systemd
 Requires(postun):   systemd
 Requires:           rubygem(async_sinatra) >= 1.2.0
-Requires:           rubygem(em-redis-unified) = 1.0.1
-Requires:           rubygem(eventmachine) = 1.0.8
-Requires:           rubygem(multi_json) = 1.11.2
-Requires:           rubygem(sensu-extension) = 1.3.0
-Requires:           rubygem(sensu-extensions) = 1.4.0
-Requires:           rubygem(sensu-logger) = 1.1.0
-Requires:           rubygem(sensu-settings) = 3.3.0
-Requires:           rubygem(sensu-spawn) = 1.6.0
-Requires:           rubygem(sensu-transport) = 3.3.0
+Requires:           rubygem(eventmachine) = 1.2.0.1
+Requires:           rubygem(sensu-extension) = 1.5.0
+Requires:           rubygem(sensu-extensions) = 1.5.0
+Requires:           rubygem(sensu-json) = 1.1.1
+Requires:           rubygem(sensu-logger) = 1.2.0
+Requires:           rubygem(sensu-redis) = 1.3.0
+Requires:           rubygem(sensu-settings) = 3.4.0
+Requires:           rubygem(sensu-spawn) = 1.8.0
+Requires:           rubygem(sensu-transport) = 5.0.0
 Requires:           rubygem(sinatra) >= 1.4.6
 Requires:           rubygem(thin) >= 1.6.3
-Requires:           rubygem(uuidtools) >= 2.1.5
 
 BuildArch: noarch
 
@@ -57,9 +72,14 @@ gem unpack %{SOURCE0}
 gem spec %{SOURCE0} -l --ruby > %{gem_name}.gemspec
 
 tar -xzf %{SOURCE1}
-cd sensu-build-%{version}-%{sensu_build_release}
+pushd sensu-build-%{version}-%{sensu_build_release}
 %patch0
-cd ..
+popd
+
+tar -xzf %{SOURCE2}
+pushd ./%{gem_name}-%{version}
+%patch1 -p1
+popd
 
 %build
 # Create the gem as gem install only works on a gem file
@@ -68,6 +88,8 @@ gem build %{gem_name}.gemspec
 # %%gem_install compiles any C extensions and installs the gem into ./%%gem_dir
 # by default, so that we can move it into the buildroot in %%install
 %gem_install
+# Copy unit tests
+mv %{_builddir}/%{gem_name}-%{version}/%{gem_name}-%{version}/spec .%{gem_instdir}
 
 %install
 mkdir -p %{buildroot}%{gem_dir}
@@ -95,6 +117,14 @@ mkdir -p %{buildroot}%{_sysconfdir}/%{name}
 cp -ar sensu-build-%{version}-%{sensu_build_release}/sensu_configs/%{name}/* %{buildroot}%{_sysconfdir}/%{name}
 
 mkdir -p %{buildroot}%{_localstatedir}/log/%{name}
+
+%check
+pushd .%{gem_instdir}
+# TO-DO: Most of the tests are disabled (by Patch1) due to network connection
+#        requirement and dependency on em-http-request which is tricky to package.
+#        This should be mocked / fixed in the future
+rspec spec
+popd
 
 %pre
 getent group sensu >/dev/null || groupadd -r sensu
@@ -134,9 +164,13 @@ exit 0
 %files doc
 %doc %{gem_docdir}
 %{gem_instdir}/%{gem_name}.gemspec
-
+%{gem_instdir}/spec
 
 %changelog
+* Mon May 09 2016 Martin Mágr <mmagr@redhat.com> - 0.23.2-1
+- Updated to upstream version 0.23.2
+- Run at least some of the unit tests
+
 * Mon Mar 07 2016 Martin Mágr <mmagr@redhat.com> - 0.22.0-1
 - Updated to upstream version 0.22.0
 
