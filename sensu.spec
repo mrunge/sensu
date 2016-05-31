@@ -4,7 +4,7 @@
 
 Name:           %{gem_name}
 Version:        0.23.2
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        A monitoring framework
 Group:          Development/Languages
 License:        MIT
@@ -117,6 +117,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/%{name}
 cp -ar sensu-build-%{version}-%{sensu_build_release}/sensu_configs/%{name}/* %{buildroot}%{_sysconfdir}/%{name}
 
 mkdir -p %{buildroot}%{_localstatedir}/log/%{name}
+mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 
 %check
 pushd .%{gem_instdir}
@@ -129,7 +130,7 @@ popd
 %pre
 getent group sensu >/dev/null || groupadd -r sensu
 getent passwd sensu >/dev/null || \
-    useradd -r -g sensu -d /etc/sensu -s /sbin/nologin \
+    useradd -r -g sensu -d %{_sharedstatedir}/%{name} -s /sbin/nologin \
     -c "Sensu monitoring software" sensu
 exit 0
 
@@ -155,6 +156,7 @@ exit 0
 %{_sysconfdir}/logrotate.d/%{name}
 %attr(0770, sensu, sensu) %{_sysconfdir}/%{name}
 %attr(0770, sensu, sensu) %{_localstatedir}/log/%{name}
+%attr(0770, sensu, sensu) %{_sharedstatedir}/%{name}
 %exclude %{gem_cache}
 %{gem_spec}
 %doc %{gem_instdir}/CHANGELOG.md
@@ -167,6 +169,9 @@ exit 0
 %{gem_instdir}/spec
 
 %changelog
+* Tue May 31 2016 Martin Mágr <mmagr@redhat.com> - 0.23.2-2
+- Changed home directory for user sensu to /var/lib/sensu
+
 * Mon May 09 2016 Martin Mágr <mmagr@redhat.com> - 0.23.2-1
 - Updated to upstream version 0.23.2
 - Run at least some of the unit tests
