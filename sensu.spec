@@ -4,7 +4,7 @@
 
 Name:           %{gem_name}
 Version:        0.23.2
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        A monitoring framework
 Group:          Development/Languages
 License:        MIT
@@ -14,6 +14,7 @@ Source1:        https://github.com/sensu/sensu-build/archive/%{version}-%{sensu_
 Source2:        https://github.com/sensu/sensu/archive/v%{version}.tar.gz
 Patch0:         sensu-sensu-build-fix-systemd-unit-binary-paths.patch
 Patch1:         0001-Disable-network-based-tests.patch
+Patch2:         0002-Relax-dependencies.patch
 
 BuildRequires:      ruby
 BuildRequires:      rubygems-devel
@@ -70,6 +71,8 @@ Documentation for %{name}.
 gem unpack %{SOURCE0}
 %setup -q -D -T -n  %{gem_name}-%{version}
 gem spec %{SOURCE0} -l --ruby > %{gem_name}.gemspec
+# relax generated dependencies
+sed -i 's#s.add_\(.*\)dependency(\(.*\), \["= \(.*\)"\])#s.add_\1dependency(\2, \["~> \3"\]\)#' %{gem_name}.gemspec
 
 tar -xzf %{SOURCE1}
 pushd sensu-build-%{version}-%{sensu_build_release}
@@ -79,6 +82,7 @@ popd
 tar -xzf %{SOURCE2}
 pushd ./%{gem_name}-%{version}
 %patch1 -p1
+%patch2 -p1
 popd
 
 %build
@@ -169,6 +173,9 @@ exit 0
 %{gem_instdir}/spec
 
 %changelog
+* Fri Aug 12 2016 Martin Mágr <mmagr@redhat.com> - 0.23.2-3
+- Relax dependencies so the package works with EPEL packages
+
 * Tue May 31 2016 Martin Mágr <mmagr@redhat.com> - 0.23.2-2
 - Changed home directory for user sensu to /var/lib/sensu
 
