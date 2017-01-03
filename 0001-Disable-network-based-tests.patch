@@ -1,28 +1,30 @@
-From 3e0457815fce904f8ad510976ef2d991d21db958 Mon Sep 17 00:00:00 2001
+From 9b0aa73bc2876144e9c87555f6fe62a894a08deb Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Martin=20M=C3=A1gr?= <mmagr@redhat.com>
-Date: Tue, 10 May 2016 16:26:24 +0200
-Subject: [PATCH] Disable network based tests
+Date: Tue, 3 Jan 2017 13:55:05 +0100
+Subject: [PATCH] Remove network related tests
 
 ---
- spec/api/process_spec.rb    | 993 --------------------------------------------
- spec/client/process_spec.rb | 244 -----------
- spec/client/socket_spec.rb  | 106 +----
- spec/helpers.rb             |  23 -
- spec/server/filter_spec.rb  |  67 ---
- spec/server/handle_spec.rb  |  52 ---
- spec/server/mutate_spec.rb  |  32 --
- spec/server/process_spec.rb | 644 ----------------------------
- spec/server/socket_spec.rb  |  42 --
- spec/utilities_spec.rb      |  14 -
- 10 files changed, 1 insertion(+), 2216 deletions(-)
+ spec/api/process_spec.rb        | 1675 ---------------------------------------
+ spec/client/http_socket_spec.rb |   84 --
+ spec/client/process_spec.rb     |  353 ---------
+ spec/server/filter_spec.rb      |   91 ---
+ spec/server/handle_spec.rb      |   74 --
+ spec/server/mutate_spec.rb      |   45 --
+ spec/server/process_spec.rb     |  837 -------------------
+ 7 files changed, 3159 deletions(-)
  delete mode 100644 spec/api/process_spec.rb
+ delete mode 100644 spec/client/http_socket_spec.rb
+ delete mode 100644 spec/client/process_spec.rb
+ delete mode 100644 spec/server/handle_spec.rb
+ delete mode 100644 spec/server/mutate_spec.rb
+ delete mode 100644 spec/server/process_spec.rb
 
 diff --git a/spec/api/process_spec.rb b/spec/api/process_spec.rb
 deleted file mode 100644
-index acb748f..0000000
+index 484d937..0000000
 --- a/spec/api/process_spec.rb
 +++ /dev/null
-@@ -1,993 +0,0 @@
+@@ -1,1675 +0,0 @@
 -require File.join(File.dirname(__FILE__), "..", "helpers.rb")
 -
 -require "sensu/api/process"
@@ -63,15 +65,15 @@ index acb748f..0000000
 -  end
 -
 -  it "can handle integer parameters" do
--    api = Sensu::API::Process.new!
--    expect(api.integer_parameter("42")).to eq(42)
--    expect(api.integer_parameter("abc")).to eq(nil)
--    expect(api.integer_parameter("42\nabc")).to eq(nil)
+-    handler = Sensu::API::HTTPHandler.new(nil)
+-    expect(handler.integer_parameter("42")).to eq(42)
+-    expect(handler.integer_parameter("abc")).to eq(nil)
+-    expect(handler.integer_parameter("42\nabc")).to eq(nil)
 -  end
 -
 -  it "can provide basic version and health information" do
 -    api_test do
--      api_request("/info") do |http, body|
+-      http_request(4567, "/info") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body[:sensu][:version]).to eq(Sensu::VERSION)
 -        expect(body[:redis][:connected]).to be(true)
@@ -87,14 +89,15 @@ index acb748f..0000000
 -
 -  it "can provide connection and queue monitoring" do
 -    api_test do
--      api_request("/health?consumers=0&messages=1000") do |http, body|
+-      http_request(4567, "/health?consumers=0&messages=1000") do |http, body|
 -        expect(http.response_header.status).to eq(204)
+-        expect(http.response_header.http_reason).to eq('No Content')
 -        expect(body).to be_empty
--        api_request("/health?consumers=1000") do |http, body|
--          expect(http.response_header.status).to eq(503)
+-        http_request(4567, "/health?consumers=1000") do |http, body|
+-          expect(http.response_header.status).to eq(412)
 -          expect(body).to be_empty
--          api_request("/health?consumers=1000&messages=1000") do |http, body|
--            expect(http.response_header.status).to eq(503)
+-          http_request(4567, "/health?consumers=1000&messages=1000") do |http, body|
+-            expect(http.response_header.status).to eq(412)
 -            async_done
 -          end
 -        end
@@ -104,7 +107,7 @@ index acb748f..0000000
 -
 -  it "can provide current events" do
 -    api_test do
--      api_request("/events") do |http, body|
+-      http_request(4567, "/events") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        test_event = Proc.new do |event|
@@ -118,7 +121,7 @@ index acb748f..0000000
 -
 -  it "can provide current events for a specific client" do
 -    api_test do
--      api_request("/events/i-424242") do |http, body|
+-      http_request(4567, "/events/i-424242") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        test_event = Proc.new do |event|
@@ -141,7 +144,7 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/clients", :post, options) do |http, body|
+-      http_request(4567, "/clients", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(201)
 -        expect(body).to be_kind_of(Hash)
 -        expect(body[:name]).to eq("i-888888")
@@ -161,7 +164,7 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/clients", :post, options) do |http, body|
+-      http_request(4567, "/clients", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        async_done
 -      end
@@ -179,7 +182,7 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/clients", :post, options) do |http, body|
+-      http_request(4567, "/clients", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        async_done
 -      end
@@ -196,7 +199,7 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/clients", :post, options) do |http, body|
+-      http_request(4567, "/clients", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        async_done
 -      end
@@ -212,7 +215,7 @@ index acb748f..0000000
 -          :subscriptions => "invalid"
 -        }
 -      }
--      api_request("/clients", :post, options) do |http, body|
+-      http_request(4567, "/clients", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        async_done
 -      end
@@ -221,7 +224,7 @@ index acb748f..0000000
 -
 -  it "can provide current clients" do
 -    api_test do
--      api_request("/clients") do |http, body|
+-      http_request(4567, "/clients") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        test_client = Proc.new do |client|
@@ -235,7 +238,7 @@ index acb748f..0000000
 -
 -  it "can provide defined checks" do
 -    api_test do
--      api_request("/checks") do |http, body|
+-      http_request(4567, "/checks") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        test_check = Proc.new do |check|
@@ -247,9 +250,43 @@ index acb748f..0000000
 -    end
 -  end
 -
+-  it "can provide defined checks without standalone checks" do
+-    api_test do
+-      http_request(4567, "/checks") do |http, body|
+-        expect(http.response_header.status).to eq(200)
+-        expect(body).to be_kind_of(Array)
+-        test_check = Proc.new do |check|
+-          check[:name] == "standalone"
+-        end
+-        expect(body).to_not contain(test_check)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can provide a specific check" do
+-    api_test do
+-      http_request(4567, "/checks/merger") do |http, body|
+-        expect(http.response_header.status).to eq(200)
+-        expect(body).to be_kind_of(Hash)
+-        expect(body).to eq({:command=>"echo -n merger", :interval=>60, :subscribers=>["test"], :name=>"merger"})
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "cannot provide a specific standalone check" do
+-    api_test do
+-      http_request(4567, "/checks/standalone") do |http, body|
+-        expect(http.response_header.status).to eq(404)
+-        async_done
+-      end
+-    end
+-  end
+-
 -  it "can provide a specific event" do
 -    api_test do
--      api_request("/event/i-424242/test") do |http, body|
+-      http_request(4567, "/events/i-424242/test") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Hash)
 -        expect(body[:client]).to be_kind_of(Hash)
@@ -268,7 +305,7 @@ index acb748f..0000000
 -
 -  it "can not provide a nonexistent event" do
 -    api_test do
--      api_request("/event/i-424242/nonexistent") do |http, body|
+-      http_request(4567, "/events/i-424242/nonexistent") do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -288,9 +325,53 @@ index acb748f..0000000
 -        end
 -      end
 -      timer(0.5) do
--        api_request("/event/i-424242/test", :delete) do |http, body|
+-        http_request(4567, "/events/i-424242/test", :delete) do |http, body|
 -          expect(http.response_header.status).to eq(202)
 -          expect(body).to include(:issued)
+-          timer(1) do
+-            redis.hget("events:i-424242", "test") do |event_json|
+-              expect(event_json).to be_nil
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can delete an event when the client has a signature" do
+-    @server = Sensu::Server::Process.new(options)
+-    async_wrapper do
+-      @server.setup_connections do
+-        @server.setup_keepalives
+-        @server.setup_results
+-        keepalive = client_template
+-        keepalive[:timestamp] = epoch
+-        keepalive[:signature] = "foo"
+-        setup_transport do |transport|
+-          transport.publish(:direct, "keepalives", Sensu::JSON.dump(keepalive))
+-        end
+-        timer(1) do
+-          redis.get("client:i-424242:signature") do |signature|
+-            expect(signature).to eq("foo")
+-            check_result = result_template
+-            check_result[:signature] = "foo"
+-            check_result[:check][:name] = 'signature_test'
+-            @server.process_check_result(check_result)
+-            timer(1) do
+-              api_test do
+-                http_request(4567, "/events/i-424242/signature_test", :delete) do |http, body|
+-                  expect(http.response_header.status).to eq(202)
+-                  expect(body).to include(:issued)
+-                  timer(2) do
+-                    redis.hget("events:i-424242", "signature_test") do |event_json|
+-                      expect(event_json).to be_nil
+-                      async_done
+-                    end
+-                  end
+-                end
+-              end
+-            end
+-          end
 -        end
 -      end
 -    end
@@ -298,7 +379,7 @@ index acb748f..0000000
 -
 -  it "can not delete a nonexistent event" do
 -    api_test do
--      api_request("/event/i-424242/nonexistent", :delete) do |http, body|
+-      http_request(4567, "/events/i-424242/nonexistent", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -324,7 +405,7 @@ index acb748f..0000000
 -            :check => "test"
 -          }
 -        }
--        api_request("/resolve", :post, options) do |http, body|
+-        http_request(4567, "/resolve", :post, options) do |http, body|
 -          expect(http.response_header.status).to eq(202)
 -          expect(body).to include(:issued)
 -        end
@@ -340,7 +421,7 @@ index acb748f..0000000
 -          :check => "nonexistent"
 -        }
 -      }
--      api_request("/resolve", :post, options) do |http, body|
+-      http_request(4567, "/resolve", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -353,7 +434,7 @@ index acb748f..0000000
 -      options = {
 -        :body => "i-424242/test"
 -      }
--      api_request("/resolve", :post, options) do |http, body|
+-      http_request(4567, "/resolve", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        async_done
@@ -368,7 +449,7 @@ index acb748f..0000000
 -          :client => "i-424242"
 -        }
 -      }
--      api_request("/resolve", :post, options) do |http, body|
+-      http_request(4567, "/resolve", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        async_done
@@ -378,13 +459,23 @@ index acb748f..0000000
 -
 -  it "can provide a specific client" do
 -    api_test do
--      api_request("/client/i-424242") do |http, body|
+-      http_request(4567, "/clients/i-424242") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Hash)
 -        expect(body[:name]).to eq("i-424242")
 -        expect(body[:address]).to eq("127.0.0.1")
 -        expect(body[:subscriptions]).to eq(["test"])
 -        expect(body[:timestamp]).to be_within(10).of(epoch)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not provide a nonexistent client" do
+-    api_test do
+-      http_request(4567, "/clients/nonexistent") do |http, body|
+-        expect(http.response_header.status).to eq(404)
+-        expect(body).to be_empty
 -        async_done
 -      end
 -    end
@@ -401,11 +492,11 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/clients", :post, options) do |http, body|
+-      http_request(4567, "/clients", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(201)
 -        expect(body).to be_kind_of(Hash)
 -        expect(body[:name]).to eq("i-888888")
--        api_request("/client/i-888888") do |http, body|
+-        http_request(4567, "/clients/i-888888") do |http, body|
 -          expect(http.response_header.status).to eq(200)
 -          expect(body).to be_kind_of(Hash)
 -          expect(body[:name]).to eq("i-888888")
@@ -419,19 +510,32 @@ index acb748f..0000000
 -    end
 -  end
 -
--  it "can not provide a nonexistent client" do
+-  it "can create a client expected to produce keepalives (eventually)" do
 -    api_test do
--      api_request("/client/nonexistent") do |http, body|
--        expect(http.response_header.status).to eq(404)
--        expect(body).to be_empty
--        async_done
+-      options = {
+-        :body => {
+-          :name => "i-888888",
+-          :address => "8.8.8.8",
+-          :subscriptions => [
+-            "test"
+-          ],
+-          :keepalives => true
+-        }
+-      }
+-      http_request(4567, "/clients", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        http_request(4567, "/clients/i-888888") do |http, body|
+-          expect(http.response_header.status).to eq(200)
+-          expect(body[:keepalives]).to be(true)
+-          async_done
+-        end
 -      end
 -    end
 -  end
 -
 -  it "can request check history for a client" do
 -    api_test do
--      api_request("/clients/i-424242/history") do |http, body|
+-      http_request(4567, "/clients/i-424242/history") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        expect(body.size).to eq(1)
@@ -448,7 +552,7 @@ index acb748f..0000000
 -
 -  it "can delete a client" do
 -    api_test do
--      api_request("/client/i-424242", :delete) do |http, body|
+-      http_request(4567, "/clients/i-424242", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(202)
 -        expect(body).to include(:issued)
 -        async_done
@@ -458,7 +562,7 @@ index acb748f..0000000
 -
 -  it "can not delete a noexistent client" do
 -    api_test do
--      api_request("/client/nonexistent", :delete) do |http, body|
+-      http_request(4567, "/clients/nonexistent", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -468,7 +572,7 @@ index acb748f..0000000
 -
 -  it "can provide a specific defined check" do
 -    api_test do
--      api_request("/check/tokens") do |http, body|
+-      http_request(4567, "/checks/tokens") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Hash)
 -        expect(body[:name]).to eq("tokens")
@@ -480,7 +584,7 @@ index acb748f..0000000
 -
 -  it "can not provide a nonexistent defined check" do
 -    api_test do
--      api_request("/check/nonexistent") do |http, body|
+-      http_request(4567, "/checks/nonexistent") do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -500,7 +604,7 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/request", :post, options) do |http, body|
+-      http_request(4567, "/request", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(202)
 -        expect(body).to include(:issued)
 -        async_done
@@ -516,7 +620,7 @@ index acb748f..0000000
 -          :subscribers => "invalid"
 -        }
 -      }
--      api_request("/request", :post, options) do |http, body|
+-      http_request(4567, "/request", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        async_done
@@ -533,7 +637,7 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/request", :post, options) do |http, body|
+-      http_request(4567, "/request", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        async_done
@@ -551,7 +655,7 @@ index acb748f..0000000
 -          ]
 -        }
 -      }
--      api_request("/request", :post, options) do |http, body|
+-      http_request(4567, "/request", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -569,7 +673,7 @@ index acb748f..0000000
 -          }
 -        }
 -      }
--      api_request("/stashes", :post, options) do |http, body|
+-      http_request(4567, "/stashes", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(201)
 -        expect(body).to include(:path)
 -        expect(body[:path]).to eq("tester")
@@ -592,7 +696,7 @@ index acb748f..0000000
 -          :path => "tester"
 -        }
 -      }
--      api_request("/stashes", :post, options) do |http, body|
+-      http_request(4567, "/stashes", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        redis.exists("stash:tester") do |exists|
@@ -611,7 +715,7 @@ index acb748f..0000000
 -          :content => "value"
 -        }
 -      }
--      api_request("/stashes", :post, options) do |http, body|
+-      http_request(4567, "/stashes", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        redis.exists("stash:tester") do |exists|
@@ -629,10 +733,29 @@ index acb748f..0000000
 -          :key => "value"
 -        }
 -      }
--      api_request("/stash/tester", :post, options) do |http, body|
+-      http_request(4567, "/stash/tester", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(201)
 -        expect(body).to include(:path)
 -        redis.get("stash:tester") do |stash_json|
+-          stash = Sensu::JSON.load(stash_json)
+-          expect(stash).to eq({:key => "value"})
+-          async_done
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can create a stash with id (path) containing a uri encoded space" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :key => "value"
+-        }
+-      }
+-      http_request(4567, "/stash/foo%20bar", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        expect(body).to include(:path)
+-        redis.get("stash:foo bar") do |stash_json|
 -          stash = Sensu::JSON.load(stash_json)
 -          expect(stash).to eq({:key => "value"})
 -          async_done
@@ -646,7 +769,7 @@ index acb748f..0000000
 -      options = {
 -        :body => "should fail"
 -      }
--      api_request("/stash/tester", :post, options) do |http, body|
+-      http_request(4567, "/stash/tester", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        redis.exists("stash:tester") do |exists|
@@ -659,7 +782,7 @@ index acb748f..0000000
 -
 -  it "can provide a stash" do
 -    api_test do
--      api_request("/stash/test/test") do |http, body|
+-      http_request(4567, "/stash/test/test") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Hash)
 -        expect(body[:key]).to eq("value")
@@ -668,9 +791,19 @@ index acb748f..0000000
 -    end
 -  end
 -
+-  it "can indicate if a stash exists" do
+-    api_test do
+-      http_request(4567, "/stash/test/test", :head) do |http, body|
+-        expect(http.response_header.status).to eq(200)
+-        expect(body).to be_empty
+-        async_done
+-      end
+-    end
+-  end
+-
 -  it "can not provide a nonexistent stash" do
 -    api_test do
--      api_request("/stash/nonexistent") do |http, body|
+-      http_request(4567, "/stash/nonexistent") do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -680,7 +813,7 @@ index acb748f..0000000
 -
 -  it "can provide multiple stashes" do
 -    api_test do
--      api_request("/stashes") do |http, body|
+-      http_request(4567, "/stashes") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        expect(body[0]).to be_kind_of(Hash)
@@ -694,8 +827,9 @@ index acb748f..0000000
 -
 -  it "can delete a stash" do
 -    api_test do
--      api_request("/stash/test/test", :delete) do |http, body|
+-      http_request(4567, "/stash/test/test", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(204)
+-        expect(http.response_header.http_reason).to eq('No Content')
 -        expect(body).to be_empty
 -        redis.exists("stash:test/test") do |exists|
 -          expect(exists).to be(false)
@@ -707,7 +841,7 @@ index acb748f..0000000
 -
 -  it "can not delete a nonexistent stash" do
 -    api_test do
--      api_request("/stash/nonexistent", :delete) do |http, body|
+-      http_request(4567, "/stash/nonexistent", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -721,12 +855,9 @@ index acb748f..0000000
 -      server.setup_redis do
 -        server.aggregate_check_result(client_template, check_template)
 -        timer(1) do
--          api_request("/aggregates") do |http, body|
+-          http_request(4567, "/aggregates") do |http, body|
 -            expect(body).to be_kind_of(Array)
--            test_aggregate = Proc.new do |aggregate|
--              aggregate[:check] == "test"
--            end
--            expect(body).to contain(test_aggregate)
+-            expect(body).to include({:name => "test"})
 -            async_done
 -          end
 -        end
@@ -734,42 +865,15 @@ index acb748f..0000000
 -    end
 -  end
 -
--  it "can provide an aggregate list" do
--    api_test do
--      server = Sensu::Server::Process.new(options)
--      server.setup_redis do
--        timestamp = epoch
--        3.times do |index|
--          check = check_template
--          check[:issued] = timestamp + index
--          server.aggregate_check_result(client_template, check)
--        end
--        timer(1) do
--          api_request("/aggregates/test") do |http, body|
--            expect(body).to be_kind_of(Array)
--            expect(body.size).to eq(3)
--            expect(body).to include(timestamp)
--            api_request("/aggregates/test?limit=1") do |http, body|
--              expect(body.size).to eq(1)
--              api_request("/aggregates/test?limit=1&age=30") do |http, body|
--                expect(body).to be_empty
--                async_done
--              end
--            end
--          end
--        end
--      end
--    end
--  end
--
--  it "can delete aggregates" do
+-  it "can delete an aggregate" do
 -    api_test do
 -      server = Sensu::Server::Process.new(options)
 -      server.setup_redis do
 -        server.aggregate_check_result(client_template, check_template)
 -        timer(1) do
--          api_request("/aggregates/test", :delete) do |http, body|
+-          http_request(4567, "/aggregates/test", :delete) do |http, body|
 -            expect(http.response_header.status).to eq(204)
+-            expect(http.response_header.http_reason).to eq('No Content')
 -            expect(body).to be_empty
 -            redis.sismember("aggregates", "test") do |exists|
 -              expect(exists).to be(false)
@@ -781,9 +885,31 @@ index acb748f..0000000
 -    end
 -  end
 -
--  it "can not delete nonexistent aggregates" do
+-  it "can delete an aggregate with an all caps name" do
 -    api_test do
--      api_request("/aggregates/nonexistent", :delete) do |http, body|
+-      server = Sensu::Server::Process.new(options)
+-      server.setup_redis do
+-        check = check_template
+-        check[:name] = "TEST"
+-        server.aggregate_check_result(client_template, check)
+-        timer(1) do
+-          http_request(4567, "/aggregates/TEST", :delete) do |http, body|
+-            expect(http.response_header.status).to eq(204)
+-            expect(http.response_header.http_reason).to eq('No Content')
+-            expect(body).to be_empty
+-            redis.sismember("aggregates", "TEST") do |exists|
+-              expect(exists).to be(false)
+-              async_done
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can not delete a nonexistent aggregate" do
+-    api_test do
+-      http_request(4567, "/aggregates/nonexistent", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -791,32 +917,49 @@ index acb748f..0000000
 -    end
 -  end
 -
--  it "can provide a specific aggregate with parameters" do
+-  it "can provide an aggregate" do
+-    api_test do
+-      server = Sensu::Server::Process.new(options)
+-      server.setup_redis do
+-        server.aggregate_check_result(client_template, check_template)
+-        timer(1) do
+-          http_request(4567, "/aggregates/test") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Hash)
+-            expect(body[:clients]).to eq(1)
+-            expect(body[:checks]).to eq(1)
+-            expect(body[:results][:ok]).to eq(0)
+-            expect(body[:results][:warning]).to eq(1)
+-            expect(body[:results][:critical]).to eq(0)
+-            expect(body[:results][:unknown]).to eq(0)
+-            expect(body[:results][:total]).to eq(1)
+-            expect(body[:results][:stale]).to eq(0)
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can provide an aggregate with a result max age" do
 -    api_test do
 -      server = Sensu::Server::Process.new(options)
 -      server.setup_redis do
 -        check = check_template
--        timestamp = epoch
--        check[:issued] = timestamp
+-        check[:executed] = epoch - 128
 -        server.aggregate_check_result(client_template, check)
 -        timer(1) do
--          parameters = "?results=true&summarize=output"
--          api_request("/aggregates/test/#{timestamp}#{parameters}") do |http, body|
+-          http_request(4567, "/aggregates/test?max_age=120") do |http, body|
 -            expect(http.response_header.status).to eq(200)
 -            expect(body).to be_kind_of(Hash)
--            expect(body[:ok]).to eq(0)
--            expect(body[:warning]).to eq(1)
--            expect(body[:critical]).to eq(0)
--            expect(body[:unknown]).to eq(0)
--            expect(body[:total]).to eq(1)
--            expect(body[:results]).to be_kind_of(Array)
--            expect(body[:results].size).to eq(1)
--            expect(body[:results][0][:client]).to eq("i-424242")
--            expect(body[:results][0][:output]).to eq("WARNING")
--            expect(body[:results][0][:status]).to eq(1)
--            expect(body[:outputs]).to be_kind_of(Hash)
--            expect(body[:outputs].size).to eq(1)
--            expect(body[:outputs][:"WARNING"]).to eq(1)
+-            expect(body[:clients]).to eq(1)
+-            expect(body[:checks]).to eq(1)
+-            expect(body[:results][:ok]).to eq(0)
+-            expect(body[:results][:warning]).to eq(0)
+-            expect(body[:results][:critical]).to eq(0)
+-            expect(body[:results][:unknown]).to eq(0)
+-            expect(body[:results][:total]).to eq(0)
+-            expect(body[:results][:stale]).to eq(1)
 -            async_done
 -          end
 -        end
@@ -826,7 +969,127 @@ index acb748f..0000000
 -
 -  it "can not provide a nonexistent aggregate" do
 -    api_test do
--      api_request("/aggregates/test/#{epoch}") do |http, body|
+-      http_request(4567, "/aggregates/nonexistent") do |http, body|
+-        expect(http.response_header.status).to eq(404)
+-        expect(body).to be_empty
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can provide aggregate client information" do
+-    api_test do
+-      server = Sensu::Server::Process.new(options)
+-      server.setup_redis do
+-        server.aggregate_check_result(client_template, check_template)
+-        timer(1) do
+-          http_request(4567, "/aggregates/test/clients") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Array)
+-            expect(body[0]).to be_kind_of(Hash)
+-            expect(body[0][:name]).to eq("i-424242")
+-            expect(body[0][:checks]).to eq(["test"])
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can not provide aggregate client information for a nonexistent aggregate" do
+-    api_test do
+-      http_request(4567, "/aggregates/nonexistent/clients") do |http, body|
+-        expect(http.response_header.status).to eq(404)
+-        expect(body).to be_empty
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can provide aggregate check information" do
+-    api_test do
+-      server = Sensu::Server::Process.new(options)
+-      server.setup_redis do
+-        server.aggregate_check_result(client_template, check_template)
+-        timer(1) do
+-          http_request(4567, "/aggregates/test/checks") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Array)
+-            expect(body[0]).to be_kind_of(Hash)
+-            expect(body[0][:name]).to eq("test")
+-            expect(body[0][:clients]).to eq(["i-424242"])
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can not provide aggregate check information for a nonexistent aggregate" do
+-    api_test do
+-      http_request(4567, "/aggregates/nonexistent/checks") do |http, body|
+-        expect(http.response_header.status).to eq(404)
+-        expect(body).to be_empty
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can provide a aggregate result summary for a severity" do
+-    api_test do
+-      server = Sensu::Server::Process.new(options)
+-      server.setup_redis do
+-        server.aggregate_check_result(client_template, check_template)
+-        timer(1) do
+-          http_request(4567, "/aggregates/test/results/warning") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Array)
+-            expect(body[0]).to be_kind_of(Hash)
+-            expect(body[0][:check]).to eq("test")
+-            expect(body[0][:summary]).to be_kind_of(Array)
+-            expect(body[0][:summary][0]).to be_kind_of(Hash)
+-            expect(body[0][:summary][0][:output]).to eq("WARNING")
+-            expect(body[0][:summary][0][:total]).to eq(1)
+-            expect(body[0][:summary][0][:clients]).to eq(["i-424242"])
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can provide a aggregate result summary for a severity with a result max age" do
+-    api_test do
+-      server = Sensu::Server::Process.new(options)
+-      server.setup_redis do
+-        check = check_template
+-        check[:executed] = epoch - 128
+-        server.aggregate_check_result(client_template, check)
+-        timer(1) do
+-          http_request(4567, "/aggregates/test/results/warning?max_age=120") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Array)
+-            expect(body).to be_empty
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can not provide a aggregate result summary for an invalid severity" do
+-    api_test do
+-      http_request(4567, "/aggregates/test/results/invalid") do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        expect(body).to be_empty
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not provide a aggregate result summary for a nonexistent aggregate" do
+-    api_test do
+-      http_request(4567, "/aggregates/nonexistent/results/warning") do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
@@ -841,7 +1104,7 @@ index acb748f..0000000
 -          :authorization => nil
 -        }
 -      }
--      api_request("/events", :options, options) do |http, body|
+-      http_request(4567, "/events", :options, options) do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_empty
 -        async_done
@@ -851,7 +1114,7 @@ index acb748f..0000000
 -
 -  it "can provide cors headers" do
 -    api_test do
--      api_request("/events") do |http, body|
+-      http_request(4567, "/events") do |http, body|
 -        cors_headers = {
 -          :origin => http.response_header["ACCESS_CONTROL_ALLOW_ORIGIN"],
 -          :methods => http.response_header["ACCESS_CONTROL_ALLOW_METHODS"],
@@ -875,7 +1138,7 @@ index acb748f..0000000
 -          :authorization => nil
 -        }
 -      }
--      api_request("/events", :put, options) do |http, body|
+-      http_request(4567, "/events", :put, options) do |http, body|
 -        expect(http.response_header.status).to eq(401)
 -        expect(body).to be_empty
 -        async_done
@@ -896,7 +1159,7 @@ index acb748f..0000000
 -          }
 -        }
 -      }
--      api_request("/stashes", :post, options) do |http, body|
+-      http_request(4567, "/stashes", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(401)
 -        expect(body).to be_empty
 -        redis.exists("stash:not_authorized") do |exists|
@@ -916,7 +1179,7 @@ index acb748f..0000000
 -          :status => 1
 -        }
 -      }
--      api_request("/results", :post, options) do |http, body|
+-      http_request(4567, "/results", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(202)
 -        expect(body).to include(:issued)
 -        async_done
@@ -934,7 +1197,7 @@ index acb748f..0000000
 -          :source => "$invalid$"
 -        }
 -      }
--      api_request("/results", :post, options) do |http, body|
+-      http_request(4567, "/results", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        async_done
@@ -949,7 +1212,7 @@ index acb748f..0000000
 -          :name => "missing_output"
 -        }
 -      }
--      api_request("/results", :post, options) do |http, body|
+-      http_request(4567, "/results", :post, options) do |http, body|
 -        expect(http.response_header.status).to eq(400)
 -        expect(body).to be_empty
 -        async_done
@@ -959,7 +1222,7 @@ index acb748f..0000000
 -
 -  it "can provide current results" do
 -    api_test do
--      api_request("/results") do |http, body|
+-      http_request(4567, "/results") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        test_result = Proc.new do |result|
@@ -973,7 +1236,7 @@ index acb748f..0000000
 -
 -  it "can provide current results for a specific client" do
 -    api_test do
--      api_request("/results/i-424242") do |http, body|
+-      http_request(4567, "/results/i-424242") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Array)
 -        test_result = Proc.new do |result|
@@ -987,7 +1250,7 @@ index acb748f..0000000
 -
 -  it "can provide a specific result" do
 -    api_test do
--      api_request("/results/i-424242/test") do |http, body|
+-      http_request(4567, "/results/i-424242/test") do |http, body|
 -        expect(http.response_header.status).to eq(200)
 -        expect(body).to be_kind_of(Hash)
 -        expect(body).to eq(result_template(@check))
@@ -998,8 +1261,9 @@ index acb748f..0000000
 -
 -  it "can delete a result" do
 -    api_test do
--      api_request("/results/i-424242/test", :delete) do |http, body|
+-      http_request(4567, "/results/i-424242/test", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(204)
+-        expect(http.response_header.http_reason).to eq('No Content')
 -        expect(body).to be_empty
 -        async_done
 -      end
@@ -1008,22 +1272,541 @@ index acb748f..0000000
 -
 -  it "can not delete a nonexistent result" do
 -    api_test do
--      api_request("/results/i-424242/nonexistent", :delete) do |http, body|
+-      http_request(4567, "/results/i-424242/nonexistent", :delete) do |http, body|
 -        expect(http.response_header.status).to eq(404)
 -        expect(body).to be_empty
 -        async_done
 -      end
 -    end
 -  end
+-
+-  it "can create a silenced registry entry for a subscription" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test"
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        redis.get("silence:test:*") do |silenced_info_json|
+-          silenced_info = Sensu::JSON.load(silenced_info_json)
+-          expect(silenced_info[:id]).to eq("test:*")
+-          expect(silenced_info[:subscription]).to eq("test")
+-          expect(silenced_info[:check]).to be_nil
+-          expect(silenced_info[:reason]).to be_nil
+-          expect(silenced_info[:creator]).to be_nil
+-          expect(silenced_info[:expire_on_resolve]).to eq(false)
+-          async_done
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can create a silenced registry entry for a check" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :check => "test"
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        redis.get("silence:*:test") do |silenced_info_json|
+-          silenced_info = Sensu::JSON.load(silenced_info_json)
+-          expect(silenced_info[:id]).to eq("*:test")
+-          expect(silenced_info[:subscription]).to be_nil
+-          expect(silenced_info[:check]).to eq("test")
+-          expect(silenced_info[:reason]).to be_nil
+-          expect(silenced_info[:creator]).to be_nil
+-          expect(silenced_info[:expire_on_resolve]).to eq(false)
+-          async_done
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can create a silenced registry entry that expires" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => "test",
+-          :expire => 3600,
+-          :reason => "testing",
+-          :creator => "rspec",
+-          :expire_on_resolve => true
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        redis.get("silence:test:test") do |silenced_info_json|
+-          silenced_info = Sensu::JSON.load(silenced_info_json)
+-          expect(silenced_info[:id]).to eq("test:test")
+-          expect(silenced_info[:subscription]).to eq("test")
+-          expect(silenced_info[:check]).to eq("test")
+-          expect(silenced_info[:reason]).to eq("testing")
+-          expect(silenced_info[:creator]).to eq("rspec")
+-          expect(silenced_info[:expire_on_resolve]).to eq(true)
+-          redis.ttl("silence:test:test") do |ttl|
+-            expect(ttl).to be_within(10).of(3600)
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  [
+-    "client:my-test-client",
+-    "roundrobin:load_balancer",
+-    "roundrobin:foo_bar-baz",
+-    "load-balancer",
+-    "load_balancer",
+-    "loadbalancer"
+-  ].each do |subscription|
+-    it "can create and retrieve silenced registry entry with a subscription e.g. #{subscription}" do
+-      api_test do
+-        options = {
+-          :body => {
+-            :subscription => subscription,
+-            :check => "test"
+-          }
+-        }
+-        http_request(4567, "/silenced", :post, options) do |http, body|
+-          expect(http.response_header.status).to eq(201)
+-          redis.get("silence:#{subscription}:test") do |silenced_info_json|
+-            timer(1) do
+-              http_request(4567, "/silenced/subscriptions/#{subscription}") do |http, body|
+-                expect(http.response_header.status).to eq(200)
+-                expect(body).to be_kind_of(Array)
+-                silence = body.last
+-                expect(silence[:id]).to eq("#{subscription}:test")
+-                async_done
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can not create a silenced registry entry when missing a subscription and/or check" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :expire => 3600,
+-          :reason => "testing",
+-          :creator => "rspec",
+-          :expire_on_resolve => true
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not create a silenced registry entry with an invalid subscription" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => 1,
+-          :check => "test"
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not create a silenced registry entry with an invalid check" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => 1
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not create a silenced registry entry with an invalid expire" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => "test",
+-          :expire => "3600"
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not create a silenced registry entry with an invalid reason" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => "test",
+-          :reason => 1
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not create a silenced registry entry with an invalid creator" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => "test",
+-          :creator => 1
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can not create a silenced registry entry with an invalid expire_on_resolve" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => "test",
+-          :expire_on_resolve => "true"
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(400)
+-        async_done
+-      end
+-    end
+-  end
+-
+-  it "can provide the silenced registry" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => "test",
+-          :expire => 3600
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        http_request(4567, "/silenced") do |http, body|
+-          expect(http.response_header.status).to eq(200)
+-          expect(body).to be_kind_of(Array)
+-          expect(body.length).to eq(1)
+-          silenced_info = body.first
+-          expect(silenced_info).to be_kind_of(Hash)
+-          expect(silenced_info[:id]).to eq("test:test")
+-          expect(silenced_info[:subscription]).to eq("test")
+-          expect(silenced_info[:check]).to eq("test")
+-          expect(silenced_info[:expire]).to be_within(10).of(3600)
+-          http_request(4567, "/silenced/subscriptions/test") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Array)
+-            expect(body.length).to eq(1)
+-            silenced_info = body.first
+-            expect(silenced_info).to be_kind_of(Hash)
+-            expect(silenced_info[:subscription]).to eq("test")
+-            expect(silenced_info[:expire]).to be_within(10).of(3600)
+-            http_request(4567, "/silenced/subscriptions/nonexistent") do |http, body|
+-              expect(http.response_header.status).to eq(200)
+-              expect(body).to be_kind_of(Array)
+-              expect(body).to be_empty
+-              http_request(4567, "/silenced/checks/test") do |http, body|
+-                expect(http.response_header.status).to eq(200)
+-                expect(body).to be_kind_of(Array)
+-                expect(body.length).to eq(1)
+-                silenced_info = body.first
+-                expect(silenced_info).to be_kind_of(Hash)
+-                expect(silenced_info[:check]).to eq("test")
+-                expect(silenced_info[:expire]).to be_within(10).of(3600)
+-                http_request(4567, "/silenced/checks/nonexistent") do |http, body|
+-                  expect(http.response_header.status).to eq(200)
+-                  expect(body).to be_kind_of(Array)
+-                  expect(body).to be_empty
+-                  async_done
+-                end
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  context "when retrieving a silenced registry entry by it's id" do
+-    it "can retrieve entry for silencing a specific check on all clients" do
+-      api_test do
+-        options = { :body => { :check => "test" } }
+-        http_request(4567, "/silenced", :post, options) do |http, body|
+-          http_request(4567, "/silenced/ids/*:test") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Hash)
+-            expect(body[:id]).to eq("*:test")
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-
+-    it "can retrieve entry for silencing all checks on a specific subscription" do
+-      api_test do
+-        options = { :body => { :subscription => "test" } }
+-        http_request(4567, "/silenced", :post, options) do |http, body|
+-          http_request(4567, "/silenced/ids/test:*") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body).to be_kind_of(Hash)
+-            expect(body[:id]).to eq("test:*")
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-
+-    it "cannot create an entry for silencing all checks on all subscriptions" do
+-      api_test do
+-        options = { :body => { :subscription => '*' } }
+-        http_request(4567, "/silenced", :post, options) do |http, body|
+-          expect(http.response_header.status).to eq(400)
+-          async_done
+-        end
+-      end
+-    end
+-
+-    it "handles requests for nonexistant ids" do
+-      api_test do
+-        http_request(4567, "/silenced/ids/nonexistant:nonexistant") do |http, body|
+-          expect(http.response_header.status).to eq(404)
+-          expect(body).to be_empty
+-          async_done
+-        end
+-      end
+-    end
+-
+-    it "handles requests for invalid ids" do
+-      api_test do
+-        http_request(4567, "/silenced/ids/invalid") do |http, body|
+-          expect(http.response_header.status).to eq(404)
+-          expect(body).to be_empty
+-          http_request(4567, "/silenced/ids/:invalid") do |http, body|
+-            expect(http.response_header.status).to eq(404)
+-            expect(body).to be_empty
+-            http_request(4567, "/silenced/ids/inv@(!alid") do |http, body|
+-              expect(http.response_header.status).to eq(404)
+-              expect(body).to be_empty
+-              async_done
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can clear a silenced registry entry with a subscription and check" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :subscription => "test",
+-          :check => "test"
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        http_request(4567, "/silenced") do |http, body|
+-          expect(http.response_header.status).to eq(200)
+-          expect(body).to be_kind_of(Array)
+-          expect(body.length).to eq(1)
+-          silenced_info = body.first
+-          expect(silenced_info).to be_kind_of(Hash)
+-          expect(silenced_info[:subscription]).to eq("test")
+-          expect(silenced_info[:check]).to eq("test")
+-          http_request(4567, "/silenced/clear", :post, options) do |http, body|
+-            expect(http.response_header.status).to eq(204)
+-            http_request(4567, "/silenced/clear", :post, options) do |http, body|
+-              expect(http.response_header.status).to eq(404)
+-              http_request(4567, "/silenced") do |http, body|
+-                expect(http.response_header.status).to eq(200)
+-                expect(body).to be_kind_of(Array)
+-                expect(body).to be_empty
+-                async_done
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can clear a silenced registry entry with an id" do
+-    api_test do
+-      options = {
+-        :body => {
+-          :check => "test"
+-        }
+-      }
+-      http_request(4567, "/silenced", :post, options) do |http, body|
+-        expect(http.response_header.status).to eq(201)
+-        http_request(4567, "/silenced") do |http, body|
+-          expect(http.response_header.status).to eq(200)
+-          expect(body).to be_kind_of(Array)
+-          expect(body.length).to eq(1)
+-          silenced_info = body.first
+-          expect(silenced_info).to be_kind_of(Hash)
+-          expect(silenced_info[:id]).to eq("*:test")
+-          expect(silenced_info[:subscription]).to be_nil
+-          expect(silenced_info[:check]).to eq("test")
+-          options = {
+-            :body => {
+-              :id => "*:test"
+-            }
+-          }
+-          http_request(4567, "/silenced/clear", :post, options) do |http, body|
+-            expect(http.response_header.status).to eq(204)
+-            http_request(4567, "/silenced/clear", :post, options) do |http, body|
+-              expect(http.response_header.status).to eq(404)
+-              http_request(4567, "/silenced") do |http, body|
+-                expect(http.response_header.status).to eq(200)
+-                expect(body).to be_kind_of(Array)
+-                expect(body).to be_empty
+-                async_done
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-end
+diff --git a/spec/client/http_socket_spec.rb b/spec/client/http_socket_spec.rb
+deleted file mode 100644
+index 4631efb..0000000
+--- a/spec/client/http_socket_spec.rb
++++ /dev/null
+@@ -1,84 +0,0 @@
+-require File.join(File.dirname(__FILE__), "..", "helpers.rb")
+-
+-require "sensu/client/process"
+-
+-describe "Sensu::Client::HTTPSocket" do
+-  include Helpers
+-
+-  before do
+-    @client = Sensu::Client::Process.new(options)
+-  end
+-
+-  it "can provide basic version and transport information" do
+-    async_wrapper do
+-      @client.setup_transport do
+-        @client.setup_http_socket
+-        timer(1) do
+-          http_request(3031, "/info") do |http, body|
+-            expect(http.response_header.status).to eq(200)
+-            expect(body[:sensu][:version]).to eq(Sensu::VERSION)
+-            expect(body[:transport][:connected]).to be(true)
+-            expect(body[:transport][:keepalives][:messages]).to be_kind_of(Integer)
+-            expect(body[:transport][:keepalives][:consumers]).to be_kind_of(Integer)
+-            expect(body[:transport][:results][:messages]).to be_kind_of(Integer)
+-            expect(body[:transport][:results][:consumers]).to be_kind_of(Integer)
+-            async_done
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can accept external check result input" do
+-    async_wrapper do
+-      @client.setup_transport do
+-        @client.setup_http_socket
+-        result_queue do |payload|
+-          result = Sensu::JSON.load(payload)
+-          expect(result[:client]).to eq("i-424242")
+-          expect(result[:check][:name]).to eq("http")
+-          async_done
+-        end
+-        timer(1) do
+-          options = {:body => {:name => "http", :output => "http", :status => 1}}
+-          http_request(3031, "/results", :post, options)do |http, body|
+-            expect(http.response_header.status).to eq(202)
+-            expect(body).to eq({:response => "ok"})
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can provide settings" do
+-    async_wrapper do
+-      @client.setup_transport do
+-        @client.setup_http_socket
+-        timer(1) do
+-          options = {
+-            :head => {
+-              :authorization => [
+-                "wrong",
+-                "credentials"
+-              ]
+-            }
+-          }
+-          http_request(3031, "/settings", :get, options) do |http, body|
+-            expect(http.response_header.status).to eq(401)
+-            http_request(3031, "/settings", :get) do |http, body|
+-              expect(http.response_header.status).to eq(200)
+-              expect(body).to be_kind_of(Hash)
+-              expect(body[:api][:password]).to eq("REDACTED")
+-              http_request(3031, "/settings?redacted=false", :get) do |http, body|
+-                expect(http.response_header.status).to eq(200)
+-                expect(body).to be_kind_of(Hash)
+-                expect(body[:api][:password]).to eq("bar")
+-                async_done
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
 -end
 diff --git a/spec/client/process_spec.rb b/spec/client/process_spec.rb
-index 7a5c119..9bdcbd8 100644
+deleted file mode 100644
+index fc165cb..0000000
 --- a/spec/client/process_spec.rb
-+++ b/spec/client/process_spec.rb
-@@ -9,222 +9,6 @@ describe "Sensu::Client::Process" do
-     @client = Sensu::Client::Process.new(options)
-   end
- 
++++ /dev/null
+@@ -1,353 +0,0 @@
+-require File.join(File.dirname(__FILE__), "..", "helpers.rb")
+-
+-require "sensu/client/process"
+-
+-describe "Sensu::Client::Process" do
+-  include Helpers
+-
+-  before do
+-    @client = Sensu::Client::Process.new(options)
+-  end
+-
 -  it "can connect to the transport" do
 -    async_wrapper do
 -      @client.setup_transport do |transport|
@@ -1083,6 +1866,24 @@ index 7a5c119..9bdcbd8 100644
 -    end
 -  end
 -
+-  it "can send a deregistraion check result" do
+-    async_wrapper do
+-      result_queue do |payload|
+-        result = Sensu::JSON.load(payload)
+-        expect(result[:client]).to eq("i-424242")
+-        expect(result[:check][:name]).to eq("deregistration")
+-        expect(result[:check][:status]).to eq(1)
+-        expect(result[:check][:handler]).to eq("DEREGISTER_HANDLER")
+-        async_done
+-      end
+-      timer(0.5) do
+-        @client.setup_transport do
+-          @client.deregister
+-        end
+-      end
+-    end
+-  end
+-
 -  it "can execute a check command" do
 -    async_wrapper do
 -      result_queue do |payload|
@@ -1100,33 +1901,61 @@ index 7a5c119..9bdcbd8 100644
 -    end
 -  end
 -
--  it "can substitute check command tokens with attributes, default values, and execute it" do
+-  it "can substitute tokens in a check definition" do
+-    check = check_template
+-    check[:command] = "echo :::nested.attribute:::"
+-    check[:foo] = [":::missing|foo:::"]
+-    check[:bar] = {
+-      :baz => ":::missing:::",
+-      :qux => ":::missing|qux:::",
+-      :quux => {
+-        :corge => ":::missing:::",
+-        :grault => ":::nonexistent:::",
+-        :garply => ":::missing|garply:::",
+-        :waldo => ":::name:::"
+-      }
+-    }
+-    substituted, unmatched_tokens = @client.object_substitute_tokens(check)
+-    expect(substituted[:name]).to eq("test")
+-    expect(substituted[:command]).to eq("echo true")
+-    expect(substituted[:foo].first).to eq("foo")
+-    expect(substituted[:bar][:baz]).to eq("")
+-    expect(substituted[:bar][:qux]).to eq("qux")
+-    expect(substituted[:bar][:quux][:corge]).to eq("")
+-    expect(substituted[:bar][:quux][:grault]).to eq("")
+-    expect(substituted[:bar][:quux][:garply]).to eq("garply")
+-    expect(substituted[:bar][:quux][:waldo]).to eq("i-424242")
+-    expect(unmatched_tokens).to match_array(["missing", "nonexistent"])
+-  end
+-
+-  it "can substitute tokens in a command with client attribute values, default values, and execute it" do
 -    async_wrapper do
+-      check = check_template
+-      command = "echo :::nested.attribute|default::: :::missing|default:::"
+-      command << " :::missing|::: :::nested.attribute:::::::nested.attribute:::"
+-      command << " :::empty|localhost::: :::empty.hash|localhost:8080:::"
+-      check[:command] = command
 -      result_queue do |payload|
 -        result = Sensu::JSON.load(payload)
 -        expect(result[:client]).to eq("i-424242")
+-        expect(result[:check][:command]).to eq(check[:command])
 -        expect(result[:check][:output]).to eq("true default true:true localhost localhost:8080\n")
 -        async_done
 -      end
 -      timer(0.5) do
 -        @client.setup_transport do
--          check = check_template
--          command = "echo :::nested.attribute|default::: :::missing|default:::"
--          command << " :::missing|::: :::nested.attribute:::::::nested.attribute:::"
--          command << " :::empty|localhost::: :::empty.hash|localhost:8080:::"
--          check[:command] = command
 -          @client.execute_check_command(check)
 -        end
 -      end
 -    end
 -  end
 -
--  it "can substitute check command tokens with attributes and handle unmatched tokens" do
+-  it "can substitute tokens in a command and handle unmatched tokens" do
 -    async_wrapper do
 -      result_queue do |payload|
 -        result = Sensu::JSON.load(payload)
 -        expect(result[:client]).to eq("i-424242")
--        expect(result[:check][:output]).to eq("Unmatched command tokens: nonexistent, noexistent.hash, empty.hash")
+-        expect(result[:check][:output]).to eq("Unmatched client token(s): nonexistent, noexistent.hash, empty.hash")
 -        async_done
 -      end
 -      timer(0.5) do
@@ -1170,7 +1999,9 @@ index 7a5c119..9bdcbd8 100644
 -        @client.setup_transport do
 -          @client.setup_subscriptions
 -          timer(1) do
--            transport.publish(:fanout, "test", Sensu::JSON.dump(check_template))
+-            setup_transport do |transport|
+-              transport.publish(:fanout, "test", Sensu::JSON.dump(check_template))
+-            end
 -          end
 -        end
 -      end
@@ -1190,7 +2021,9 @@ index 7a5c119..9bdcbd8 100644
 -        @client.setup_transport do
 -          @client.setup_subscriptions
 -          timer(1) do
--            transport.publish(:direct, "roundrobin:test", Sensu::JSON.dump(check_template))
+-            setup_transport do |transport|
+-              transport.publish(:direct, "roundrobin:test", Sensu::JSON.dump(check_template))
+-            end
 -          end
 -        end
 -      end
@@ -1211,7 +2044,9 @@ index 7a5c119..9bdcbd8 100644
 -        @client.setup_transport do
 -          @client.setup_subscriptions
 -          timer(1) do
--            transport.publish(:fanout, "test", Sensu::JSON.dump(check_template))
+-            setup_transport do |transport|
+-              transport.publish(:fanout, "test", Sensu::JSON.dump(check_template))
+-            end
 -          end
 -        end
 -      end
@@ -1240,19 +2075,52 @@ index 7a5c119..9bdcbd8 100644
 -    end
 -  end
 -
-   it "can calculate a check execution splay interval" do
-     allow(Time).to receive(:now).and_return("1414213569.032")
-     check = check_template
-@@ -233,32 +17,4 @@ describe "Sensu::Client::Process" do
-     check[:interval] = 3600
-     expect(@client.calculate_execution_splay(check)).to eq(783.321)
-   end
+-  it "can subdue standalone check execution" do
+-    async_wrapper do
+-      result_queue do |payload|
+-        result = Sensu::JSON.load(payload)
+-        expect(result[:check][:name]).to eq("test")
+-        async_done
+-      end
+-      timer(0.5) do
+-        @client.setup_transport do
+-          check = check_template
+-          checks = [
+-            check.merge(
+-              :name => "subdued",
+-              :subdue => {
+-                :days => {
+-                  :all => [
+-                    {
+-                      :begin => (Time.now - 3600).strftime("%l:00 %p").strip,
+-                      :end => (Time.now + 3600).strftime("%l:00 %p").strip
+-                    }
+-                  ]
+-                }
+-              }
+-            ),
+-            check
+-          ]
+-          @client.schedule_checks(checks)
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can calculate a check execution splay interval" do
+-    allow(Time).to receive(:now).and_return("1414213569.032")
+-    check = check_template
+-    check[:interval] = 60
+-    expect(@client.calculate_execution_splay(check)).to eq(3.321)
+-    check[:interval] = 3600
+-    expect(@client.calculate_execution_splay(check)).to eq(783.321)
+-  end
 -
 -  it "can accept external result input via sockets" do
 -    async_wrapper do
 -      @client.setup_transport do
 -        @client.setup_sockets
--        expected = ["tcp", "udp"]
+-        expected = ["tcp", "udp", "http"]
 -        result_queue do |payload|
 -          result = Sensu::JSON.load(payload)
 -          expect(result[:client]).to eq("i-424242")
@@ -1271,196 +2139,33 @@ index 7a5c119..9bdcbd8 100644
 -            socket.send_datagram(data, "127.0.0.1", 3030)
 -            socket.close_connection_after_writing
 -          end
+-          options = {:body => {:name => "http", :output => "http", :status => 1}}
+-          http_request(3031, "/results", :post, options)do |http, body|
+-            expect(http.response_header.status).to eq(202)
+-            expect(body).to eq({:response => "ok"})
+-          end
 -        end
 -      end
 -    end
 -  end
- end
-diff --git a/spec/client/socket_spec.rb b/spec/client/socket_spec.rb
-index 4975173..6f02147 100644
---- a/spec/client/socket_spec.rb
-+++ b/spec/client/socket_spec.rb
-@@ -20,7 +20,7 @@ describe Sensu::Client::Socket do
-     subject.logger = logger
-     subject.settings = settings
-     subject.transport = transport
--    allow(Time).to receive_messages(:now => Time.at(1234))
-+    #allow(Time).to receive_messages(:now => Time.at(1234))
-   end
- 
-   describe "#validate_check_result" do
-@@ -150,17 +150,6 @@ describe Sensu::Client::Socket do
-   end
- 
-   describe "#process_data" do
--    it "responds to a `ping`" do
--      expect(logger).to receive_messages(:debug => "socket received ping")
--      expect(subject).to receive(:respond).with("pong")
--      subject.process_data("ping")
--    end
--
--    it "responds to a `  ping  `" do
--      expect(logger).to receive_messages(:debug => "socket received ping")
--      expect(subject).to receive(:respond).with("pong")
--      subject.process_data("  ping  ")
--    end
- 
-     it "debug-logs data chunks passing through it" do
-       data = "a relentless stream"
-@@ -205,98 +194,5 @@ describe Sensu::Client::Socket do
-         subject.receive_data(char)
-       end
-     end
--
--    it "receives data as part of an eventmachine tcp socket server" do
--      check_result = result_template
--      async_wrapper do
--        EM.start_server("127.0.0.1", 3030, described_class) do |socket|
--          socket.logger = logger
--          socket.settings = settings
--          socket.transport = transport
--          expect(socket).to receive(:respond).with("ok") do
--            timer(described_class::WATCHDOG_DELAY * 1.1) do
--              async_done
--            end
--          end
--        end
--        expect(logger).not_to receive(:warn)
--        expect(logger).not_to receive(:error)
--        expect(logger).to receive(:debug).
--          with("socket received data", kind_of(Hash)).at_least(:once)
--        expect(logger).to receive(:info).
--          with("publishing check result", {:payload => check_result})
--        expect(transport).to receive(:publish).
--          with(:direct, "results", kind_of(String)) do |_, _, json_string|
--            expect(Sensu::JSON.load(json_string)).to eq(check_result)
--          end
--        timer(0.1) do
--          EM.connect("127.0.0.1", 3030) do |socket|
--            # send data one byte at a time.
--            pending = Sensu::JSON.dump(check_result[:check]).chars.to_a
--            EM.tick_loop do
--              if pending.empty?
--                :stop
--              else
--                socket.send_data(pending.shift)
--              end
--            end
--          end
--        end
--      end
--    end
--
--    it "will discard data from a sender that has stopped sending for too long" do
--      async_wrapper do
--        EM::start_server("127.0.0.1", 3030, described_class) do |socket|
--          socket.logger = logger
--          socket.settings = settings
--          socket.transport = transport
--          expect(socket).to receive(:respond).with("invalid") do
--            async_done
--          end
--        end
--        allow(logger).to receive(:debug)
--        expect(logger).to receive(:warn).
--          with("discarding data buffer for sender and closing connection", kind_of(Hash))
--        timer(0.1) do
--          EM.connect("127.0.0.1", 3030) do |socket|
--            socket.send_data('{"partial":')
--          end
--        end
--      end
--    end
--
--    it "receives data as part of an eventmachine udp socket server" do
--      check_result = result_template
--      async_wrapper do
--        EM::open_datagram_socket("127.0.0.1", 3030, described_class) do |socket|
--          socket.logger = logger
--          socket.settings = settings
--          socket.transport = transport
--          socket.protocol = :udp
--          expect(socket).to receive(:respond).with("invalid")
--          expect(socket).to receive(:respond).with("ok") do
--            timer(0.5) do
--              async_done
--            end
--          end
--        end
--        allow(logger).to receive(:debug)
--        expect(logger).to receive(:error).
--          with("failed to process check result from socket", kind_of(Hash))
--        expect(logger).to receive(:info).
--          with("publishing check result", {:payload => check_result})
--        expect(transport).to receive(:publish).
--          with(:direct, "results", kind_of(String)) do |_, _, json_string|
--            expect(Sensu::JSON.load(json_string)).to eq(check_result)
--          end
--        timer(0.1) do
--          EM::open_datagram_socket("0.0.0.0", 0, nil) do |socket|
--            socket.send_datagram('{"partial":', "127.0.0.1", 3030)
--            socket.send_datagram(Sensu::JSON.dump(check_result[:check]), "127.0.0.1", 3030)
--          end
--        end
--      end
--    end
-   end
- end
-diff --git a/spec/helpers.rb b/spec/helpers.rb
-index cd8d830..ee5e25d 100644
---- a/spec/helpers.rb
-+++ b/spec/helpers.rb
-@@ -1,6 +1,5 @@
- require "rspec"
- require "eventmachine"
--require "em-http-request"
- require "securerandom"
- require "sensu/json"
- 
-@@ -136,28 +135,6 @@ module Helpers
-   end
- 
-   def api_request(uri, method=:get, options={}, &callback)
--    default_options = {
--      :head => {
--        :authorization => [
--          "foo",
--          "bar"
--        ]
--      }
--    }
--    request_options = default_options.merge(options)
--    if request_options[:body].is_a?(Hash) || request_options[:body].is_a?(Array)
--      request_options[:body] = Sensu::JSON.dump(request_options[:body])
--    end
--    http = EM::HttpRequest.new("http://localhost:4567#{uri}").send(method, request_options)
--    http.callback do
--      body = case
--      when http.response.empty?
--        http.response
--      else
--        Sensu::JSON.load(http.response)
--      end
--      callback.call(http, body)
--    end
-   end
- 
-   class TestServer < EM::Connection
+-end
 diff --git a/spec/server/filter_spec.rb b/spec/server/filter_spec.rb
-index 327b457..84ecba9 100644
+index 78e222c..75d3695 100644
 --- a/spec/server/filter_spec.rb
 +++ b/spec/server/filter_spec.rb
-@@ -165,71 +165,4 @@ describe "Sensu::Server::Filter" do
+@@ -85,97 +85,6 @@ describe "Sensu::Server::Filter" do
      expect(@server.filter_attributes_match?(@event, attributes)).to be(true)
    end
  
 -  it "can filter an event using a filter" do
 -    async_wrapper do
 -      @event[:client][:environment] = "production"
--      @server.event_filter("production", @event) do |filtered|
+-      @server.event_filter("production", @event) do |filtered, filter_name|
 -        expect(filtered).to be(false)
--        @server.event_filter("development", @event) do |filtered|
+-        expect(filter_name).to eq("production")
+-        @server.event_filter("development", @event) do |filtered, filter_name|
 -          expect(filtered).to be(true)
+-          expect(filter_name).to eq("development")
 -          @server.event_filter("nonexistent", @event) do |filtered|
 -            expect(filtered).to be(false)
 -            handler = {
@@ -1481,6 +2186,30 @@ index 327b457..84ecba9 100644
 -              end
 -            end
 -          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can filter events for a specific time window" do
+-    async_wrapper do
+-      @server.event_filter("time", @event) do |filtered|
+-        expect(filtered).to be(true)
+-        @server.settings[:filters][:time] = {
+-          :when => {
+-            :days => {
+-              :all => [
+-                {
+-                  :begin => (Time.now + 3600).strftime("%l:00 %p").strip,
+-                  :end => (Time.now + 5400).strftime("%l:00 %p").strip
+-                }
+-              ]
+-            }
+-          }
+-        }
+-        @server.event_filter("time", @event) do |filtered|
+-          expect(filtered).to be(false)
+-          async_done
 -        end
 -      end
 -    end
@@ -1507,29 +2236,46 @@ index 327b457..84ecba9 100644
 -        raise "not filtered"
 -      end
 -      handler.delete(:severities)
--      handler[:subdue] = {
--        :begin => (Time.now - 3600).strftime("%l:00 %p").strip,
--        :end => (Time.now + 3600).strftime("%l:00 %p").strip
--      }
+-      @event[:silenced] = true
 -      @server.filter_event(handler, @event) do
 -        raise "not filtered"
 -      end
--      handler.delete(:subdue)
+-      @event[:silenced] = false
 -      @server.filter_event(handler, @event) do |event|
 -        expect(event).to be(@event)
 -        async_done
 -      end
 -    end
 -  end
- end
+-
+   it "can catch SyntaxErrors in eval filters" do
+     attributes = {
+       :occurrences => "eval: raise SyntaxError"
 diff --git a/spec/server/handle_spec.rb b/spec/server/handle_spec.rb
-index 0f68ccb..667853d 100644
+deleted file mode 100644
+index 17f1183..0000000
 --- a/spec/server/handle_spec.rb
-+++ b/spec/server/handle_spec.rb
-@@ -17,56 +17,4 @@ describe "Sensu::Server::Handle" do
-     on_error = @server.handler_error(@handlers[:file], @event_data)
-     expect(on_error.arity).to be(1)
-   end
++++ /dev/null
+@@ -1,74 +0,0 @@
+-require File.join(File.dirname(__FILE__), "..", "helpers.rb")
+-
+-require "sensu/server/process"
+-
+-describe "Sensu::Server::Handle" do
+-  include Helpers
+-
+-  before do
+-    @server = Sensu::Server::Process.new(options)
+-    settings = Sensu::Settings.get(options)
+-    @handlers = settings[:handlers]
+-    @event_data = Sensu::JSON.dump(event_template)
+-    @extensions = Sensu::Extensions.get(options)
+-  end
+-
+-  it "can handle an event handler error" do
+-    on_error = @server.handler_error(@handlers[:file], @event_data)
+-    expect(on_error.arity).to be(1)
+-  end
 -
 -  it "can handle an event with a pipe handler" do
 -    async_wrapper do
@@ -1562,9 +2308,11 @@ index 0f68ccb..667853d 100644
 -
 -  it "can handle an event with a transport handler" do
 -    async_wrapper do
--      transport.subscribe(:direct, "events") do |_, payload|
--        expect(Sensu::JSON.load(payload)).to eq(Sensu::JSON.load(@event_data))
--        async_done
+-      setup_transport do |transport|
+-        transport.subscribe(:direct, "events") do |_, payload|
+-          expect(Sensu::JSON.load(payload)).to eq(Sensu::JSON.load(@event_data))
+-          async_done
+-        end
 -      end
 -      timer(0.5) do
 -        @server.setup_transport do
@@ -1582,15 +2330,25 @@ index 0f68ccb..667853d 100644
 -      end
 -    end
 -  end
- end
+-end
 diff --git a/spec/server/mutate_spec.rb b/spec/server/mutate_spec.rb
-index a616f67..d91ac1c 100644
+deleted file mode 100644
+index a616f67..0000000
 --- a/spec/server/mutate_spec.rb
-+++ b/spec/server/mutate_spec.rb
-@@ -10,36 +10,4 @@ describe "Sensu::Server::Mutate" do
-     @event = event_template
-   end
- 
++++ /dev/null
+@@ -1,45 +0,0 @@
+-require File.join(File.dirname(__FILE__), "..", "helpers.rb")
+-
+-require "sensu/server/process"
+-
+-describe "Sensu::Server::Mutate" do
+-  include Helpers
+-
+-  before do
+-    @server = Sensu::Server::Process.new(options)
+-    @event = event_template
+-  end
+-
 -  it "can mutate event data" do
 -    async_wrapper do
 -      handler = {
@@ -1623,15 +2381,25 @@ index a616f67..d91ac1c 100644
 -      end
 -    end
 -  end
- end
+-end
 diff --git a/spec/server/process_spec.rb b/spec/server/process_spec.rb
-index eb5c196..d32e660 100644
+deleted file mode 100644
+index 95273e3..0000000
 --- a/spec/server/process_spec.rb
-+++ b/spec/server/process_spec.rb
-@@ -10,104 +10,6 @@ describe "Sensu::Server::Process" do
-     @event = event_template
-   end
- 
++++ /dev/null
+@@ -1,837 +0,0 @@
+-require File.join(File.dirname(__FILE__), "..", "helpers.rb")
+-
+-require "sensu/server/process"
+-
+-describe "Sensu::Server::Process" do
+-  include Helpers
+-
+-  before do
+-    @server = Sensu::Server::Process.new(options)
+-    @event = event_template
+-  end
+-
 -  it "can connect to redis" do
 -    async_wrapper do
 -      @server.setup_redis do |connection|
@@ -1661,7 +2429,9 @@ index eb5c196..d32e660 100644
 -        keepalive[:timestamp] = epoch
 -        redis.flushdb do
 -          timer(1) do
--            transport.publish(:direct, "keepalives", Sensu::JSON.dump(keepalive))
+-            setup_transport do |transport|
+-              transport.publish(:direct, "keepalives", Sensu::JSON.dump(keepalive))
+-            end
 -            timer(1) do
 -              redis.sismember("clients", "i-424242") do |exists|
 -                expect(exists).to be(true)
@@ -1700,24 +2470,26 @@ index eb5c196..d32e660 100644
 -        keepalive[:signature] = "foo"
 -        redis.flushdb do
 -          timer(1) do
--            transport.publish(:direct, "keepalives", Sensu::JSON.dump(keepalive))
--            timer(1) do
--              redis.get("client:i-424242") do |client_json|
--                client = Sensu::JSON.load(client_json)
--                expect(client).to eq(keepalive)
--                redis.get("client:i-424242:signature") do |signature|
--                  expect(signature).to eq("foo")
--                  malicious = keepalive.dup
--                  malicious[:timestamp] = epoch
--                  malicious[:signature] = "bar"
--                  transport.publish(:direct, "keepalives", Sensu::JSON.dump(malicious))
--                  timer(1) do
--                    redis.get("client:i-424242") do |client_json|
--                      client = Sensu::JSON.load(client_json)
--                      expect(client).to eq(keepalive)
--                      redis.get("client:i-424242:signature") do |signature|
--                        expect(signature).to eq("foo")
--                        async_done
+-            setup_transport do |transport|
+-              transport.publish(:direct, "keepalives", Sensu::JSON.dump(keepalive))
+-              timer(1) do
+-                redis.get("client:i-424242") do |client_json|
+-                  client = Sensu::JSON.load(client_json)
+-                  expect(client).to eq(keepalive)
+-                  redis.get("client:i-424242:signature") do |signature|
+-                    expect(signature).to eq("foo")
+-                    malicious = keepalive.dup
+-                    malicious[:timestamp] = epoch
+-                    malicious[:signature] = "bar"
+-                    transport.publish(:direct, "keepalives", Sensu::JSON.dump(malicious))
+-                    timer(1) do
+-                      redis.get("client:i-424242") do |client_json|
+-                        client = Sensu::JSON.load(client_json)
+-                        expect(client).to eq(keepalive)
+-                        redis.get("client:i-424242:signature") do |signature|
+-                          expect(signature).to eq("foo")
+-                          async_done
+-                        end
 -                      end
 -                    end
 -                  end
@@ -1730,44 +2502,76 @@ index eb5c196..d32e660 100644
 -    end
 -  end
 -
-   it "can derive handlers from a handler list containing a nested set" do
-     handler_list = ["nested_set_one"]
-     handlers = @server.derive_handlers(handler_list)
-@@ -121,352 +23,6 @@ describe "Sensu::Server::Process" do
-     expect(handlers.last).to eq(expected)
-   end
- 
+-  it "can derive handlers from a handler list containing a nested set" do
+-    handler_list = ["nested_set_one"]
+-    handlers = @server.derive_handlers(handler_list)
+-    expect(handlers.size).to eq(2)
+-    expect(handlers.first).to be_an_instance_of(Sensu::Extension::Debug)
+-    expected = {
+-      :name => "file",
+-      :type => "pipe",
+-      :command => "cat > /tmp/sensu_event"
+-    }
+-    expect(handlers.last).to eq(expected)
+-  end
+-
 -  it "can aggregate check results" do
 -    async_wrapper do
 -      @server.setup_redis do
--        timestamp = epoch
 -        clients = ["foo", "bar", "baz", "qux"]
 -        redis.flushdb do
--          clients.each_with_index do |client_name, index|
+-          clients.each do |client_name|
 -            client = client_template
 -            client[:name] = client_name
 -            check = check_template
--            check[:issued] = timestamp
--            check[:executed] = timestamp + index
--            check[:status] = index
+-            check[:aggregate] = true
+-            @server.aggregate_check_result(client, check)
+-            check = check_template
+-            check[:aggregate] = "foobar"
 -            @server.aggregate_check_result(client, check)
 -          end
 -          timer(2) do
--            result_set = "test:#{timestamp}"
 -            redis.sismember("aggregates", "test") do |exists|
 -              expect(exists).to be(true)
--              redis.sismember("aggregates:test", timestamp.to_s) do |exists|
+-              redis.sismember("aggregates", "foobar") do |exists|
 -                expect(exists).to be(true)
--                redis.hgetall("aggregate:#{result_set}") do |aggregate|
--                  expect(aggregate["total"]).to eq("4")
--                  expect(aggregate["ok"]).to eq("1")
--                  expect(aggregate["warning"]).to eq("1")
--                  expect(aggregate["critical"]).to eq("1")
--                  expect(aggregate["unknown"]).to eq("1")
--                  redis.hgetall("aggregation:#{result_set}") do |aggregation|
--                    clients.each do |client_name|
--                      expect(aggregation).to include(client_name)
--                    end
+-                expected_members = clients.map do |client_name|
+-                  "#{client_name}:test"
+-                end
+-                redis.smembers("aggregates:test") do |aggregate_members|
+-                  expect(aggregate_members).to match_array(expected_members)
+-                  redis.smembers("aggregates:foobar") do |aggregate_members|
+-                    expect(aggregate_members).to match_array(expected_members)
+-                    async_done
+-                  end
+-                end
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can aggregate check results across multiple named aggregates" do
+-    async_wrapper do
+-      aggregates = ["foo", "bar"]
+-      redis.flushdb do
+-        client = client_template
+-        client[:name] = "aggro"
+-        check = check_template
+-        check[:aggregates] = aggregates
+-        @server.setup_redis do
+-          @server.aggregate_check_result(client, check)
+-          timer(2) do
+-            redis.sismember("aggregates", "foo") do |exists|
+-              expect(exists).to be(true)
+-              redis.smembers("aggregates:foo") do |aggregate_members|
+-                expect(aggregate_members).to include("aggro:test")
+-                redis.sismember("aggregates", "bar") do |exists|
+-                  expect(exists).to be(true)
+-                  redis.smembers("aggregates:bar") do |aggregate_members|
+-                    expect(aggregate_members).to include("aggro:test")
 -                    async_done
 -                  end
 -                end
@@ -1821,6 +2625,102 @@ index eb5c196..d32e660 100644
 -    end
 -  end
 -
+-  it "can process results with silencing" do
+-    async_wrapper do
+-      @server.setup_redis do
+-        redis.flushdb do
+-          redis.set("client:i-424242", Sensu::JSON.dump(client_template)) do
+-            silenced_info = {
+-              :id => "test:*"
+-            }
+-            redis.set("silence:test:*", Sensu::JSON.dump(silenced_info)) do
+-              silenced_info[:id] = "*:test"
+-              redis.set("silence:*:test", Sensu::JSON.dump(silenced_info)) do
+-                silenced_info[:id] = "test:test"
+-                redis.set("silence:test:test", Sensu::JSON.dump(silenced_info)) do
+-                  @server.process_check_result(result_template)
+-                  timer(1) do
+-                    redis.hget("events:i-424242", "test") do |event_json|
+-                      event = Sensu::JSON.load(event_json)
+-                      expect(event[:silenced]).to eq(true)
+-                      expect(event[:silenced_by]).to eq(["test:*", "test:test", "*:test"])
+-                      async_done
+-                    end
+-                  end
+-                end
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can expire silenced entries on event resolution" do
+-    async_wrapper do
+-      @server.setup_redis do
+-        FileUtils.rm_rf("/tmp/sensu_event")
+-        expect(File.exists?("/tmp/sensu_event")).to eq(false)
+-        redis.flushdb do
+-          redis.set("client:i-424242", Sensu::JSON.dump(client_template)) do
+-            silenced_info = {
+-              :id => "test:*",
+-              :expire_on_resolve => true
+-            }
+-            redis.set("silence:test:*", Sensu::JSON.dump(silenced_info)) do
+-              result = result_template
+-              result[:check][:handler] = "file"
+-              @server.process_check_result(result)
+-              timer(1) do
+-                expect(File.exists?("/tmp/sensu_event")).to eq(false)
+-                result[:check][:status] = 0
+-                @server.process_check_result(result)
+-                timer(1) do
+-                  expect(File.exists?("/tmp/sensu_event")).to eq(true)
+-                  async_done
+-                end
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
+-  it "can have event id and occurrence watermark persist until the event is resolved" do
+-    async_wrapper do
+-      @server.setup_redis do
+-        redis.flushdb do
+-          client = client_template
+-          redis.set("client:i-424242", Sensu::JSON.dump(client)) do
+-            @server.process_check_result(result_template)
+-            @server.process_check_result(result_template)
+-            timer(2) do
+-              redis.hget("events:i-424242", "test") do |event_json|
+-                event = Sensu::JSON.load(event_json)
+-                event_id = event[:id]
+-                expect(event[:occurrences]).to eq(2)
+-                expect(event[:occurrences_watermark]).to eq(2)
+-                result = result_template
+-                result[:check][:status] = 2
+-                @server.process_check_result(result)
+-                timer(2) do
+-                  redis.hget("events:i-424242", "test") do |event_json|
+-                    event = Sensu::JSON.load(event_json)
+-                    expect(event[:id]).to eq(event_id)
+-                    expect(event[:occurrences]).to eq(1)
+-                    expect(event[:occurrences_watermark]).to eq(2)
+-                    async_done
+-                  end
+-                end
+-              end
+-            end
+-          end
+-        end
+-      end
+-    end
+-  end
+-
 -  it "can not resolve events when provided the option" do
 -    async_wrapper do
 -      @server.setup_redis do
@@ -1836,6 +2736,7 @@ index eb5c196..d32e660 100644
 -                expect(event[:action]).to eq("create")
 -                expect(event[:occurrences]).to eq(1)
 -                result[:check][:status] = 0
+-                @server.process_check_result(result)
 -                timer(1) do
 -                  redis.hget("events:i-424242", "test") do |event_json|
 -                    event = Sensu::JSON.load(event_json)
@@ -1862,37 +2763,43 @@ index eb5c196..d32e660 100644
 -            client = client_template
 -            redis.set("client:i-424242", Sensu::JSON.dump(client)) do
 -              result = result_template
--              transport.publish(:direct, "results", Sensu::JSON.dump(result))
--              timer(1) do
+-              setup_transport do |transport|
 -                transport.publish(:direct, "results", Sensu::JSON.dump(result))
--                timer(2) do
--                  redis.sismember("result:i-424242", "test") do |is_member|
--                    expect(is_member).to be(true)
--                    redis.get("result:i-424242:test") do |result_json|
--                      result = Sensu::JSON.load(result_json)
--                      expect(result[:output]).to eq("WARNING")
--                      timer(7) do
--                        redis.hget("events:i-424242", "test") do |event_json|
--                          event = Sensu::JSON.load(event_json)
--                          expect(event[:id]).to be_kind_of(String)
--                          expect(event[:check][:status]).to eq(1)
--                          expect(event[:occurrences]).to eq(2)
--                          expect(event[:action]).to eq("create")
--                          expect(event[:timestamp]).to be_within(10).of(epoch)
--                          read_event_file = Proc.new do
--                            begin
--                              event_file = IO.read("/tmp/sensu_event_bridge.json")
--                              Sensu::JSON.load(event_file)
--                            rescue
--                              retry
+-                timer(1) do
+-                  transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-                  timer(2) do
+-                    redis.sismember("result:i-424242", "test") do |is_member|
+-                      expect(is_member).to be(true)
+-                      redis.get("result:i-424242:test") do |result_json|
+-                        result = Sensu::JSON.load(result_json)
+-                        expect(result[:output]).to eq("WARNING")
+-                        timer(7) do
+-                          redis.hget("events:i-424242", "test") do |event_json|
+-                            event = Sensu::JSON.load(event_json)
+-                            expect(event[:id]).to be_kind_of(String)
+-                            expect(event[:check][:status]).to eq(1)
+-                            expect(event[:occurrences]).to eq(2)
+-                            expect(event[:occurrences_watermark]).to eq(2)
+-                            expect(event[:last_ok]).to be_within(30).of(epoch)
+-                            expect(event[:silenced]).to eq(false)
+-                            expect(event[:silenced_by]).to be_empty
+-                            expect(event[:action]).to eq("create")
+-                            expect(event[:timestamp]).to be_within(10).of(epoch)
+-                            read_event_file = Proc.new do
+-                              begin
+-                                event_file = IO.read("/tmp/sensu_event_bridge.json")
+-                                Sensu::JSON.load(event_file)
+-                              rescue
+-                                retry
+-                              end
 -                            end
+-                            compare_event_file = Proc.new do |event_file|
+-                              expect(event_file[:check]).to eq(event[:check])
+-                              expect(event_file[:client]).to eq(event[:client])
+-                              async_done
+-                            end
+-                            EM.defer(read_event_file, compare_event_file)
 -                          end
--                          compare_event_file = Proc.new do |event_file|
--                            expect(event_file[:check]).to eq(event[:check])
--                            expect(event_file[:client]).to eq(event[:client])
--                            async_done
--                          end
--                          EM.defer(read_event_file, compare_event_file)
 -                        end
 -                      end
 -                    end
@@ -1916,16 +2823,18 @@ index eb5c196..d32e660 100644
 -            client[:signature] = "foo"
 -            redis.set("client:i-424242", Sensu::JSON.dump(client)) do
 -              result = result_template
--              transport.publish(:direct, "results", Sensu::JSON.dump(result))
--              timer(1) do
--                redis.sismember("result:i-424242", "test") do |is_member|
--                  expect(is_member).to be(false)
--                  result[:signature] = "foo"
--                  transport.publish(:direct, "results", Sensu::JSON.dump(result))
--                  timer(1) do
--                    redis.sismember("result:i-424242", "test") do |is_member|
--                      expect(is_member).to be(true)
--                      async_done
+-              setup_transport do |transport|
+-                transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-                timer(1) do
+-                  redis.sismember("result:i-424242", "test") do |is_member|
+-                    expect(is_member).to be(false)
+-                    result[:signature] = "foo"
+-                    transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-                    timer(1) do
+-                      redis.sismember("result:i-424242", "test") do |is_member|
+-                        expect(is_member).to be(true)
+-                        async_done
+-                      end
 -                    end
 -                  end
 -                end
@@ -1959,6 +2868,9 @@ index eb5c196..d32e660 100644
 -            check[:output] = "foo"
 -            truncated = @server.truncate_check_output(check)
 -            expect(truncated[:output]).to eq("foo")
+-            check[:output] = "foo\255"
+-            truncated = @server.truncate_check_output(check)
+-            expect(truncated[:output]).to eq("foo")
 -            check[:output] = ""
 -            truncated = @server.truncate_check_output(check)
 -            expect(truncated[:output]).to eq("")
@@ -1970,7 +2882,9 @@ index eb5c196..d32e660 100644
 -              result = result_template
 -              result[:check][:type] = "metric"
 -              result[:check][:output] = "foo\nbar\nbaz"
--              transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-              setup_transport do |transport|
+-                transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-              end
 -              timer(2) do
 -                redis.sismember("result:i-424242", "test") do |is_member|
 -                  expect(is_member).to be(true)
@@ -1997,7 +2911,9 @@ index eb5c196..d32e660 100644
 -            result = result_template
 -            result[:check][:source] = "i-888888"
 -            result[:check][:handler] = "debug"
--            transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-            setup_transport do |transport|
+-              transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-            end
 -            timer(3) do
 -              redis.sismember("clients", "i-888888") do |exists|
 -                expect(exists).to be(true)
@@ -2008,6 +2924,7 @@ index eb5c196..d32e660 100644
 -                  redis.hget("events:i-888888", "test") do |event_json|
 -                    event = Sensu::JSON.load(event_json)
 -                    expect(event[:client][:address]).to eq("unknown")
+-                    expect(event[:client][:subscriptions]).to include("client:i-888888")
 -                    async_done
 -                  end
 -                end
@@ -2021,13 +2938,15 @@ index eb5c196..d32e660 100644
 -
 -  it "can publish check requests" do
 -    async_wrapper do
--      transport.subscribe(:fanout, "test") do |_, payload|
--        check_request = Sensu::JSON.load(payload)
--        expect(check_request[:name]).to eq("test")
--        expect(check_request[:command]).to eq("echo WARNING && exit 1")
--        expect(check_request[:source]).to eq("switch-x")
--        expect(check_request[:issued]).to be_within(10).of(epoch)
--        async_done
+-      setup_transport do |transport|
+-        transport.subscribe(:fanout, "test") do |_, payload|
+-          check_request = Sensu::JSON.load(payload)
+-          expect(check_request[:name]).to eq("test")
+-          expect(check_request[:command]).to eq("echo WARNING && exit 1")
+-          expect(check_request[:source]).to eq("switch-x")
+-          expect(check_request[:issued]).to be_within(10).of(epoch)
+-          async_done
+-        end
 -      end
 -      timer(0.5) do
 -        @server.setup_transport do
@@ -2042,12 +2961,14 @@ index eb5c196..d32e660 100644
 -
 -  it "can publish check requests to round-robin subscriptions" do
 -    async_wrapper do
--      transport.subscribe(:direct, "roundrobin:test") do |_, payload|
--        check_request = Sensu::JSON.load(payload)
--        expect(check_request[:name]).to eq("test")
--        expect(check_request[:command]).to eq("echo WARNING && exit 1")
--        expect(check_request[:issued]).to be_within(10).of(epoch)
--        async_done
+-      setup_transport do |transport|
+-        transport.subscribe(:direct, "roundrobin:test") do |_, payload|
+-          check_request = Sensu::JSON.load(payload)
+-          expect(check_request[:name]).to eq("test")
+-          expect(check_request[:command]).to eq("echo WARNING && exit 1")
+-          expect(check_request[:issued]).to be_within(10).of(epoch)
+-          async_done
+-        end
 -      end
 -      timer(0.5) do
 -        @server.setup_transport do
@@ -2061,14 +2982,16 @@ index eb5c196..d32e660 100644
 -
 -  it "can publish extension check requests" do
 -    async_wrapper do
--      transport.subscribe(:fanout, "test") do |_, payload|
--        check_request = Sensu::JSON.load(payload)
--        expect(check_request[:name]).to eq("test")
--        expect(check_request[:source]).to eq("switch-x")
--        expect(check_request[:extension]).to eq("rspec")
--        expect(check_request[:issued]).to be_within(10).of(epoch)
--        expect(check_request).not_to include(:command)
--        async_done
+-      setup_transport do |transport|
+-        transport.subscribe(:fanout, "test") do |_, payload|
+-          check_request = Sensu::JSON.load(payload)
+-          expect(check_request[:name]).to eq("test")
+-          expect(check_request[:source]).to eq("switch-x")
+-          expect(check_request[:extension]).to eq("rspec")
+-          expect(check_request[:issued]).to be_within(10).of(epoch)
+-          expect(check_request).not_to include(:command)
+-          async_done
+-        end
 -      end
 -      timer(0.5) do
 -        @server.setup_transport do
@@ -2083,21 +3006,25 @@ index eb5c196..d32e660 100644
 -    end
 -  end
 -
-   it "can calculate a check execution splay interval" do
-     allow(Time).to receive(:now).and_return("1414213569.032")
-     check = check_template
-@@ -476,204 +32,4 @@ describe "Sensu::Server::Process" do
-     expect(@server.calculate_check_execution_splay(check)).to eq(3497.601)
-   end
- 
+-  it "can calculate a check execution splay interval" do
+-    allow(Time).to receive(:now).and_return("1414213569.032")
+-    check = check_template
+-    check[:interval] = 60
+-    expect(@server.calculate_check_execution_splay(check)).to eq(17.601)
+-    check[:interval] = 3600
+-    expect(@server.calculate_check_execution_splay(check)).to eq(3497.601)
+-  end
+-
 -  it "can schedule check request publishing" do
 -    async_wrapper do
 -      expected = ["tokens", "merger", "sensu_cpu_time", "source"]
--      transport.subscribe(:fanout, "test") do |_, payload|
--        check_request = Sensu::JSON.load(payload)
--        expect(check_request[:issued]).to be_within(10).of(epoch)
--        expect(expected.delete(check_request[:name])).not_to be_nil
--        async_done if expected.empty?
+-      setup_transport do |transport|
+-        transport.subscribe(:fanout, "test") do |_, payload|
+-          check_request = Sensu::JSON.load(payload)
+-          expect(check_request[:issued]).to be_within(10).of(epoch)
+-          expect(expected.delete(check_request[:name])).not_to be_nil
+-          async_done if expected.empty?
+-        end
 -      end
 -      timer(0.5) do
 -        @server.setup_transport do
@@ -2185,22 +3112,32 @@ index eb5c196..d32e660 100644
 -                result = result_template
 -                result[:check][:status] = 0
 -                result[:check][:executed] = epoch - 30
--                transport.publish(:direct, "results", Sensu::JSON.dump(result))
--                result[:check][:name] = "foo"
--                result[:check][:ttl] = 30
--                transport.publish(:direct, "results", Sensu::JSON.dump(result))
--                result[:check][:name] = "bar"
--                result[:check][:ttl] = 60
--                transport.publish(:direct, "results", Sensu::JSON.dump(result))
--                timer(2) do
--                  @server.determine_stale_check_results
+-                setup_transport do |transport|
+-                  transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-                  result[:check][:name] = "foo"
+-                  result[:check][:ttl] = 30
+-                  transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-                  result[:check][:name] = "bar"
+-                  result[:check][:ttl] = 60
+-                  transport.publish(:direct, "results", Sensu::JSON.dump(result))
+-                  result[:check][:name] = "baz"
+-                  result[:check][:ttl] = 30
+-                  result[:check][:ttl_status] = 2
+-                  transport.publish(:direct, "results", Sensu::JSON.dump(result))
 -                  timer(2) do
--                    redis.hgetall("events:i-424242") do |events|
--                      expect(events.size).to eq(1)
--                      event = Sensu::JSON.load(events["foo"])
--                      expect(event[:check][:output]).to match(/Last check execution was 3[0-9] seconds ago/)
--                      expect(event[:check][:status]).to eq(1)
--                      async_done
+-                    @server.determine_stale_check_results(45)
+-                    timer(2) do
+-                      redis.hgetall("events:i-424242") do |events|
+-                        expect(events.size).to eq(2)
+-                        event = Sensu::JSON.load(events["foo"])
+-                        expect(event[:check][:output]).to match(/Last check execution was 3[0-9] seconds ago/)
+-                        expect(event[:check][:status]).to eq(1)
+-                        expect(event[:check][:interval]).to eq(45)
+-                        event = Sensu::JSON.load(events["baz"])
+-                        expect(event[:check][:output]).to match(/Last check execution was 3[0-9] seconds ago/)
+-                        expect(event[:check][:status]).to eq(2)
+-                        async_done
+-                      end
 -                    end
 -                  end
 -                end
@@ -2212,35 +3149,32 @@ index eb5c196..d32e660 100644
 -    end
 -  end
 -
--  it "can prune aggregations" do
+-  it "can skip creating stale check results when client has a keepalive event" do
 -    async_wrapper do
--      @server.setup_redis do
--        redis.flushdb do
+-      redis.flushdb do
+-        @server.setup_connections do
+-          @server.setup_results
 -          client = client_template
+-          client[:timestamp] = epoch - 120
 -          redis.set("client:i-424242", Sensu::JSON.dump(client)) do
--            timestamp = epoch - 26
--            26.times do |index|
--              check = check_template
--              check[:issued] = timestamp + index
--              check[:status] = index
--              @server.aggregate_check_result(client, check)
--            end
--            timer(1) do
--              redis.smembers("aggregates:test") do |aggregates|
--                aggregates.sort!
--                expect(aggregates.size).to eq(26)
--                oldest = aggregates.shift
--                @server.prune_check_result_aggregations
--                timer(1) do
--                  redis.smembers("aggregates:test") do |aggregates|
--                    expect(aggregates.size).to eq(20)
--                    expect(aggregates).not_to include(oldest)
--                    result_set = "test:#{oldest}"
--                    redis.exists("aggregate:#{result_set}") do |exists|
--                      expect(exists).to be(false)
--                      redis.exists("aggregation:#{result_set}") do |exists|
--                        expect(exists).to be(false)
--                        async_done
+-            redis.sadd("clients", "i-424242") do
+-              @server.determine_stale_clients
+-              timer(1) do
+-                redis.hget("events:i-424242", "keepalive") do |event_json|
+-                  event = Sensu::JSON.load(event_json)
+-                  expect(event[:check][:status]).to eq(2)
+-                  stale_result = result_template
+-                  stale_result[:check][:status] = 0
+-                  stale_result[:check][:ttl] = 60
+-                  stale_result[:check][:executed] = epoch - 1200
+-                  setup_transport do |transport|
+-                    transport.publish(:direct, "results", Sensu::JSON.dump(stale_result)) do
+-                      @server.determine_stale_check_results
+-                      timer(1) do
+-                        redis.hexists("events:i-424242", "test") do |ttl_event_exists|
+-                          expect(ttl_event_exists).to eq(false)
+-                          async_done
+-                        end
 -                      end
 -                    end
 -                  end
@@ -2290,83 +3224,7 @@ index eb5c196..d32e660 100644
 -      end
 -    end
 -  end
- end
-diff --git a/spec/server/socket_spec.rb b/spec/server/socket_spec.rb
-index 2a200dc..29c4a42 100644
---- a/spec/server/socket_spec.rb
-+++ b/spec/server/socket_spec.rb
-@@ -9,46 +9,4 @@ describe "Sensu::Server::Socket" do
-     @event_data = Sensu::JSON.dump(event_template)
-   end
- 
--  it "can send data to a listening socket" do
--    async_wrapper do
--      EM::start_server("127.0.0.1", 1234, Helpers::TestServer) do |server|
--        server.expected = @event_data
--      end
--      EM::connect("127.0.0.1", 1234, Sensu::Server::Socket) do |socket|
--        socket.on_success = Proc.new {}
--        socket.on_error = Proc.new {}
--        socket.send_data(@event_data)
--        socket.close_connection_after_writing
--      end
--    end
--  end
--
--  it "can fail to connect to a socket" do
--    async_wrapper do
--      EM::connect("127.0.0.1", 1234, Sensu::Server::Socket) do |socket|
--        socket.on_success = Proc.new {}
--        socket.on_error = Proc.new do |error|
--          expect(error.to_s).to eq("failed to connect to socket")
--          async_done
--        end
--        socket.send_data(@event_data)
--        socket.close_connection_after_writing
--      end
--    end
--  end
--
--  it "can timeout while sending data to a socket" do
--    async_wrapper do
--      EM::start_server("127.0.0.1", 1234, Helpers::TestServer)
--      EM::connect("127.0.0.1", 1234, Sensu::Server::Socket) do |socket|
--        socket.on_success = Proc.new {}
--        socket.on_error = Proc.new do |error|
--          expect(error.to_s).to eq("socket timeout")
--          async_done
--        end
--        socket.set_timeout(1)
--        socket.send_data(@event_data)
--      end
--    end
--  end
- end
-diff --git a/spec/utilities_spec.rb b/spec/utilities_spec.rb
-index 377b324..ec7d270 100644
---- a/spec/utilities_spec.rb
-+++ b/spec/utilities_spec.rb
-@@ -10,20 +10,6 @@ describe "Sensu::Utilities" do
-     expect(testing?).to be(true)
-   end
- 
--  it "can retry a block call until it returns true" do
--    async_wrapper do
--      times = 0
--      retry_until_true(0.05) do
--        times +=1
--        times == 3
--      end
--      timer(0.5) do
--        expect(times).to eq(3)
--        async_done
--      end
--    end
--  end
--
-   it "can deep merge two hashes" do
-     hash_one = {
-       :foo => 1,
+-end
 -- 
-2.4.11
+2.7.4
 
