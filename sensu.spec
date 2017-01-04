@@ -3,7 +3,7 @@
 
 Name:           %{gem_name}
 Version:        0.27.0.beta.2
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        A monitoring framework
 Group:          Development/Languages
 License:        MIT
@@ -15,6 +15,7 @@ Source3:        sensu-client.service
 Source4:        sensu-server.service
 Source5:        sensu.sysconfig
 Source6:        sensu.logrotate
+Source7:        sensu.config
 Patch1:         0001-Disable-network-based-tests.patch
 
 BuildRequires:      ruby
@@ -110,8 +111,11 @@ mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 install -p -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
 # install logrotate
 mkdir -p %{buildroot}%{_sysconfdir}/logrotate.d
-install -p -m 644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
-
+install -p -m 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
+# install default config
+mkdir -p %{buildroot}%{_sysconfdir}/%{name}/conf.d
+install -p -m 0644 %{SOURCE7} %{buildroot}%{_sysconfdir}/%{name}/config.json
+# install remaining directory structure and files
 mkdir -p %{buildroot}%{_localstatedir}/log/%{name}
 touch %{buildroot}%{_localstatedir}/log/%{name}/%{name}-client.log
 touch %{buildroot}%{_localstatedir}/log/%{name}/%{name}-server.log
@@ -152,6 +156,7 @@ exit 0
 %{_unitdir}/*.service
 %{_sysconfdir}/sysconfig/%{name}
 %{_sysconfdir}/logrotate.d/%{name}
+%attr(0770, sensu, sensu) %{_sysconfdir}/%{name}
 %attr(0770, sensu, sensu) %{_localstatedir}/log/%{name}
 %attr(0770, sensu, sensu) %{_localstatedir}/log/%{name}/%{name}-client.log
 %attr(0770, sensu, sensu) %{_localstatedir}/log/%{name}/%{name}-server.log
@@ -159,7 +164,6 @@ exit 0
 %attr(0770, sensu, sensu) %{_sharedstatedir}/%{name}
 %exclude %{gem_cache}
 %{gem_spec}
-
 
 %files doc
 %doc %{gem_docdir}
@@ -170,6 +174,9 @@ exit 0
 %{gem_instdir}/spec
 
 %changelog
+* Wed Jan 04 2017 Martin Mágr <mmagr@redhat.com> - 0.27.0.beta.2-2
+- Add configuration install back
+
 * Mon Jan 02 2017 Martin Mágr <mmagr@redhat.com> - 0.27.0.beta.2-1
 - Updated to latest upstream version
 - Fixed log files permissions
