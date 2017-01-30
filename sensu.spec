@@ -2,8 +2,8 @@
 %global gem_name sensu
 
 Name:           %{gem_name}
-Version:        0.27.0.beta.2
-Release:        2%{?dist}
+Version:        0.27.0
+Release:        1%{?dist}
 Summary:        A monitoring framework
 Group:          Development/Languages
 License:        MIT
@@ -174,6 +174,9 @@ exit 0
 %{gem_instdir}/spec
 
 %changelog
+* Mon Jan 30 2017 Martin Mágr <mmagr@redhat.com> - 0.27.0-1
+- Updated to latest upstream version
+
 * Wed Jan 04 2017 Martin Mágr <mmagr@redhat.com> - 0.27.0.beta.2-2
 - Add configuration install back
 
