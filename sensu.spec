@@ -70,13 +70,20 @@ Documentation for %{name}.
 
 %prep
 gem unpack %{SOURCE0}
+%if 0%{?dlrn} > 0
+%setup -q -D -T -n  %{dlrn_nvr}
+%else
 %setup -q -D -T -n  %{gem_name}-%{version}
+%endif
 gem spec %{SOURCE0} -l --ruby > %{gem_name}.gemspec
 # relax generated dependencies
 sed -i 's#s.add_\(.*\)dependency(\(.*\), \["= \(.*\)"\])#s.add_\1dependency(\2, \["~> \3"\]\)#' %{gem_name}.gemspec
-# prepare unit test suite
-tar -xzf %{SOURCE1}
+
+%if 0%{?dlrn} > 0
+pushd ./%{dlrn_nvr}
+%else
 pushd ./%{gem_name}-%{version}
+%endif
 %patch1 -p1
 popd
 
@@ -94,6 +101,14 @@ mv %{_builddir}/%{gem_name}-%{version}/%{gem_name}-%{version}/spec .%{gem_instdi
 mkdir -p %{buildroot}%{gem_dir}
 cp -a .%{gem_dir}/* \
         %{buildroot}%{gem_dir}/
+
+# prepare unit test suite
+install -d -p %{_builddir}%{gem_instdir}
+%if 0%{?dlrn} > 0
+tar -xvzf %{SOURCE1} -C %{_builddir}/%{dlrn_nvr}/%{gem_instdir} --strip-components=1 %{gem_name}-%{version}/spec
+%else
+tar -xvzf %{SOURCE1} -C %{_builddir}/%{gem_name}-%{version}/%{gem_instdir} --strip-components=1 %{gem_name}-%{version}/spec
+%endif
 
 mkdir -p %{buildroot}%{_bindir}
 cp -pa .%{_bindir}/* \
@@ -166,6 +181,7 @@ exit 0
 %{gem_spec}
 
 %files doc
+%defattr(0770, sensu, sensu, 0770)
 %doc %{gem_docdir}
 %doc %{gem_instdir}/CHANGELOG.md
 %doc %{gem_instdir}/MIT-LICENSE.txt
@@ -174,6 +190,9 @@ exit 0
 %{gem_instdir}/spec
 
 %changelog
+* Fri Apr 21 2017 Martin Mágr <mmagr@redhat.com> - 0.27.0-2
+- Change ownership of doc files to sensu
+
 * Mon Jan 30 2017 Martin Mágr <mmagr@redhat.com> - 0.27.0-1
 - Updated to latest upstream version
 
